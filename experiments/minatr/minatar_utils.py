@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import gym
 from minatar import Environment
 
-from afbc import nets
+from uafbc import nets
 
 
 class MinAtarEnv:
@@ -31,7 +31,7 @@ class MinAtarEnv:
         return self.env.state_shape()[-1]
 
 
-class MinAtarEncoder(nets.AFBCEncoder):
+class MinAtarEncoder(nets.Encoder):
     def __init__(self, channels, emb_dim=50):
         super().__init__()
         self._dim = emb_dim
