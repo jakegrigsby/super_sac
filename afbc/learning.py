@@ -150,16 +150,12 @@ def offline_actor_update(
 
 
 def alpha_update(
-        buffer,
-        agent,
-        optimizer,
-        batch_size,
-        log_alpha,
-        aug_mix,
-        target_entropy,
-    ):
+    buffer, agent, optimizer, batch_size, log_alpha, aug_mix, target_entropy,
+):
     logs = {}
-    replay_dict = lu.sample_move_and_augment(buffer=buffer, batch_size=batch_size, per=False, aug_mix=aug_mix)
+    replay_dict = lu.sample_move_and_augment(
+        buffer=buffer, batch_size=batch_size, per=False, aug_mix=aug_mix
+    )
     o, *_ = replay_dict["primary_batch"]
     with torch.no_grad():
         a_dist = agent.actor(o)
@@ -170,6 +166,7 @@ def alpha_update(
     optimizer.step()
     logs["alpha_loss"] = alpha_loss.item()
     return logs
+
 
 def online_actor_update(
     buffer,
@@ -193,11 +190,15 @@ def online_actor_update(
         s_rep = agent.encoder(o)
     a_dist = agent.actor(s_rep)
     if discrete:
-        vals = torch.stack([q(s_rep) for q in agent.critics], dim=0).min(0).values - (log_alpha.exp() * a_dist.entropy())
+        vals = torch.stack([q(s_rep) for q in agent.critics], dim=0).min(0).values - (
+            log_alpha.exp() * a_dist.entropy()
+        )
         actor_loss = -(a_dist.probs * vals).sum(1, keepdim=True).mean()
     else:
         a = a_dist.rsample()
-        vals = torch.stack([q(s_rep, a) for q in agent.critics], dim=0).min(0).values - (log_alpha.exp() * a_dist.entropy())
+        vals = torch.stack([q(s_rep, a) for q in agent.critics], dim=0).min(
+            0
+        ).values - (log_alpha.exp() * a_dist.entropy())
         actor_loss = -(vals).mean()
 
     optimizer.zero_grad()

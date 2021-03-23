@@ -157,7 +157,15 @@ def adjust_priorities(logs, replay_dict, agent, buffer):
 
 
 def compute_td_targets(
-    logs, replay_dict, agent, target_agent, ensemble_n, log_alpha, pop, gamma, discrete=False,
+    logs,
+    replay_dict,
+    agent,
+    target_agent,
+    ensemble_n,
+    log_alpha,
+    pop,
+    gamma,
+    discrete=False,
 ):
     o, a, r, o1, d = replay_dict["primary_batch"]
     with torch.no_grad():
@@ -183,7 +191,9 @@ def compute_td_targets(
             # denormalize target
             val_s1 = agent.popart(val_s1, normalized=False)
         breakpoint()
-        td_target = r + gamma * (1.0 - d) * val_s1 - (log_alpha.exp() * a_dist_s1.entropy())
+        td_target = (
+            r + gamma * (1.0 - d) * val_s1 - (log_alpha.exp() * a_dist_s1.entropy())
+        )
         if agent.popart:
             # update popart stats
             agent.popart.update_stats(td_target)

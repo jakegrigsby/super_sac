@@ -42,7 +42,7 @@ def afbc(
     encoder_l2=0.0,
     pop=True,
     # rl kwargs
-    init_alpha=.01,
+    init_alpha=0.01,
     gamma=0.99,
     mlp_tau=0.005,
     encoder_tau=0.01,
@@ -264,15 +264,16 @@ def afbc(
 
         if init_alpha > 0 and alpha_lr > 0:
             actor_logs.update(
-                    learning.alpha_update(
-                        buffer=buffer,
-                        agent=agent,
-                        optimizer=alpha_optimizer,
-                        batch_size=batch_size,
-                        log_alpha=log_alpha,
-                        aug_mix=aug_mix,
-                        target_entropy=target_entropy,
-                    ))
+                learning.alpha_update(
+                    buffer=buffer,
+                    agent=agent,
+                    optimizer=alpha_optimizer,
+                    batch_size=batch_size,
+                    log_alpha=log_alpha,
+                    aug_mix=aug_mix,
+                    target_entropy=target_entropy,
+                )
+            )
 
         #############
         ## LOGGING ##
