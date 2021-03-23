@@ -6,11 +6,11 @@ from torch import nn
 import torch.nn.functional as F
 import dmc2gym
 
-import afbc
-from afbc.wrappers import SimpleGymWrapper
+import uafbc
+from uafbc.wrappers import SimpleGymWrapper
 
 
-class IdentityEncoder(afbc.nets.AFBCEncoder):
+class IdentityEncoder(uafbc.nets.Encoder):
     def __init__(self, dim):
         super().__init__()
         self._dim = dim
@@ -29,21 +29,22 @@ def train_dmc_online(args):
     test_env = SimpleGymWrapper(dmc2gym.make(args.domain, args.task))
 
     # create agent
-    agent = afbc.AFBCAgent(
+    agent = uafbc.Agent(
         act_space_size=train_env.action_space.shape[0],
         encoder=IdentityEncoder(train_env.observation_space.shape[0]),
-        actor_network_cls=afbc.nets.mlps.ContinuousStochasticActor,
-        critic_network_cls=afbc.nets.mlps.ContinuousCritic,
+        actor_network_cls=uafbc.nets.mlps.ContinuousStochasticActor,
+        critic_network_cls=uafbc.nets.mlps.ContinuousCritic,
+        critic_ensemble_size=2,
         hidden_size=1024,
         discrete=False,
         auto_rescale_targets=False,
-        beta_dist=True,
+        beta_dist=False,
     )
 
-    buffer = afbc.replay.PrioritizedReplayBuffer(size=1_000_000)
+    buffer = uafbc.replay.PrioritizedReplayBuffer(size=1_000_000)
 
     # run training
-    afbc.afbc(
+    uafbc.uafbc(
         agent=agent,
         train_env=train_env,
         test_env=test_env,
@@ -55,7 +56,8 @@ def train_dmc_online(args):
         critic_lr=1e-4,
         encoder_lr=1e-4,
         batch_size=512,
-        weighted_bellman_temp = None,
+        weighted_bellman_temp=None,
+        weight_type=None,
         use_bc_update_online=False,
         num_steps_offline=0,
         num_steps_online=1_000_000,
@@ -69,6 +71,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--domain", type=str, default="walker")
     parser.add_argument("--task", type=str, default="walk")
-    parser.add_argument("--name", type=str, default="afbc_dmc_run")
+    parser.add_argument("--name", type=str, default="uafbc_dmc_run")
     args = parser.parse_args()
     train_dmc_online(args)
