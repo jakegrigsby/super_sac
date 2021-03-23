@@ -4,11 +4,11 @@ import numpy as np
 import torch
 
 import d4rl
-import afbc
+import uafbc
 import gym
 
 
-class IdentityEncoder(afbc.nets.AFBCEncoder):
+class IdentityEncoder(uafbc.nets.Encoder):
     def __init__(self, dim):
         super().__init__()
         self._dim = dim
@@ -23,30 +23,29 @@ class IdentityEncoder(afbc.nets.AFBCEncoder):
 
 
 def train_d4rl_gym(args):
-    train_env = afbc.wrappers.SimpleGymWrapper(gym.make(args.env))
-    test_env = afbc.wrappers.SimpleGymWrapper(gym.make(args.env))
+    train_env = uafbc.wrappers.SimpleGymWrapper(gym.make(args.env))
+    test_env = uafbc.wrappers.SimpleGymWrapper(gym.make(args.env))
     state_space = test_env.observation_space
     action_space = test_env.action_space
 
     # create agent
-    agent = afbc.AFBCAgent(
-        state_space.shape[0],
+    agent = uafbc.Agent(
         action_space.shape[0],
         encoder=IdentityEncoder(state_space.shape[0]),
-        actor_network_cls=afbc.nets.mlps.ContinuousStochasticActor,
-        critic_network_cls=afbc.nets.mlps.ContinuousCritic,
+        actor_network_cls=uafbc.nets.mlps.ContinuousStochasticActor,
+        critic_network_cls=uafbc.nets.mlps.ContinuousCritic,
         hidden_size=256,
-        beta_dist=True,
+        beta_dist=False,
         discrete=False,
+        critic_ensemble_size=2,
+        auto_rescale_targets=False,
     )
 
     # get offline datset
     dset = d4rl.qlearning_dataset(test_env)
     dset_size = dset["observations"].shape[0]
     # create replay buffer
-    buffer = afbc.replay.PrioritizedReplayBuffer(
-        size=dset_size, action_shape=action_space.shape,
-    )
+    buffer = uafbc.replay.PrioritizedReplayBuffer(size=dset_size)
     buffer.load_experience(
         {"obs": dset["observations"]},
         dset["actions"],
@@ -56,13 +55,25 @@ def train_d4rl_gym(args):
     )
 
     # run training
-    afbc.afbc(
-        agent=agent, train_env=train_env, test_env=test_env, buffer=buffer, verbosity=1,
+    uafbc.uafbc(
+        agent=agent, 
+        train_env=train_env, 
+        test_env=test_env, 
+        buffer=buffer, 
+        verbosity=1,
+        num_steps_offline=500_000,
+        num_steps_online=0,
+        weighted_bellman_temp=None,
+        weight_type=None,
+        bc_warmup_steps=0,
+        name=args.name,
+        pop=False,
     )
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--env", type=str, default="hopper-medium-expert-v0")
+    parser.add_argument("--env", type=str, default="halfcheetah-medium-expert-v0")
+    parser.add_argument("--name", type=str, default="uafbc_d4rl_gym")
     args = parser.parse_args()
     train_d4rl_gym(args)
