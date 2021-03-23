@@ -1,0 +1,2 @@
+5. fix priority weights in the actor and critic updates
+6. make sunrise and softmax weights have same temperature interpretation
