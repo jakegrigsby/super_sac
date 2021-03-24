@@ -40,7 +40,6 @@ def train_gym_discrete(args):
         discrete=True,
         critic_ensemble_size=2,
         auto_rescale_targets=False,
-        beta_dist=False,
     )
 
     # create replay buffer
