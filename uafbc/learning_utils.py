@@ -177,11 +177,10 @@ def compute_td_targets(
             ensemble_preds = torch.stack(
                 [critic(s1_rep) for critic in ensemble], dim=0,
             )
-            breakpoint()
-            s1_q_pred = ensemble_preds.min(0).values - (
-                log_alpha.exp() * torch.log(a_dist_s1)
-            )
-            val_s1 = (a_dist_s1.probs * s1_q_pred).sum(1, keepdim=True)
+            s1_q_pred = ensemble_preds.min(0).values
+            val_s1 = (a_dist_s1.probs * s1_q_pred).sum(1, keepdim=True) - (
+                log_alpha.exp() * a_dist_s1.entropy()
+            ).unsqueeze(1)
         else:
             a_s1 = a_dist_s1.sample()
             logp_a1 = a_dist_s1.log_prob(a_s1).sum(-1, keepdim=True)
@@ -191,11 +190,9 @@ def compute_td_targets(
             val_s1 = ensemble_preds.min(0).values - (
                 log_alpha.exp() * a_dist_s1.log_prob(a_s1).sum(-1, keepdim=True)
             )
-
         if agent.popart and pop:
             # denormalize target
             val_s1 = agent.popart(val_s1, normalized=False)
-
         td_target = r + gamma * (1.0 - d) * val_s1
 
         if agent.popart:

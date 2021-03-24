@@ -46,7 +46,7 @@ class Agent:
                 {
                     "log_std_low": log_std_low,
                     "log_std_high": log_std_high,
-                    "dist_impl": "beta" if beta_dist else "simple",
+                    "dist_impl": "beta" if beta_dist else "pyd",
                 }
             )
 

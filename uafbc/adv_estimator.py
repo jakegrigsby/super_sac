@@ -90,11 +90,8 @@ class AdvantageEstimator(nn.Module):
             .min(0)
             .values
         )
-
         # A(s, a) = Q(s, a) - V(s)
         adv = q_preds - value
-        if torch.isnan(adv).sum() > 0:
-            breakpoint()
         return adv
 
     def forward(self, obs, action):

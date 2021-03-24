@@ -80,10 +80,13 @@ def critic_update(
             q_pred = agent.popart(q_pred)
         td_error = td_target - q_pred
         critic_loss += td_error ** 2
-    critic_loss *= 0.5 * backup_weights * replay_dict["imp_weights"]
+    critic_loss *= (
+        0.5 * backup_weights * replay_dict["imp_weights"] * (1.0 / len(agent.critics))
+    )
     critic_loss = critic_loss.mean()
 
     if encoder_lambda:
+        print("lambda")
         critic_loss += encoder_lambda * lu.encoder_invariance_constraint(
             logs, replay_dict, agent
         )
@@ -102,6 +105,7 @@ def critic_update(
 
     logs["random_critic_grad_norm"] = lu.get_grad_norm(random.choice(agent.critics))
     logs["encoder_grad_norm"] = lu.get_grad_norm(agent.encoder)
+    logs["critic_loss"] = critic_loss
     lu.adjust_priorities(logs, replay_dict, agent, buffer)
     return logs
 
@@ -119,6 +123,7 @@ def offline_actor_update(
     discrete=False,
     filter_=True,
 ):
+    print("offline actor update")
     logs = {}
     agent.train()
     replay_dict = lu.sample_move_and_augment(
@@ -172,11 +177,10 @@ def alpha_update(
     with torch.no_grad():
         a_dist = agent.actor(agent.encoder(o))
     if discrete:
-        breakpoint()
-        alpha_loss = (-log_alpha.exp() * (a_dist.entropy() + target_entropy)).mean()
+        alpha_loss = (-log_alpha * (a_dist.entropy() + target_entropy)).mean()
     else:
         alpha_loss = (
-            -log_alpha.exp() * a_dist.log_prob(a_dist.sample()).sum(-1, keepdim=True)
+            -log_alpha * a_dist.log_prob(a_dist.sample()).sum(-1, keepdim=True)
             + target_entropy
         ).mean()
     optimizer.zero_grad()
@@ -208,17 +212,14 @@ def online_actor_update(
         s_rep = agent.encoder(o)
     a_dist = agent.actor(s_rep)
     if discrete:
-        breakpoint()
-        vals = torch.stack([q(s_rep) for q in agent.critics], dim=0).min(0).values - (
-            log_alpha.exp() * torch.log(a_dist)
-        )
-        actor_loss = -(a_dist.probs * vals).sum(1, keepdim=True).mean()
+        vals = torch.stack([q(s_rep) for q in agent.critics], dim=0).min(0).values
+        entropy_bonus = log_alpha.exp() * a_dist.entropy()
+        actor_loss = -((a_dist.probs * vals).sum(1) - entropy_bonus).mean()
     else:
         a = a_dist.rsample()
-        vals = torch.stack([q(s_rep, a) for q in agent.critics], dim=0).min(
-            0
-        ).values - (log_alpha.exp() * a_dist.log_prob(a).sum(-1, keepdim=True))
-        actor_loss = -(vals).mean()
+        vals = torch.stack([q(s_rep, a) for q in agent.critics], dim=0).min(0).values
+        entropy_bonus = log_alpha.exp() * a_dist.log_prob(a).sum(-1, keepdim=True)
+        actor_loss = -(vals - entropy_bonus).mean()
 
     optimizer.zero_grad()
     actor_loss.backward()
