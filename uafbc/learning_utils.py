@@ -117,8 +117,9 @@ def filtered_bc_loss(logs, replay_dict, agent, filter_=True, discrete=False):
     if filter_:
         with torch.no_grad():
             adv = agent.adv_estimator(o, a)
+            # binary filter
             mask = (adv >= 0.0).float()
-            adv_weights = mask * (adv.exp().clamp(0.0, 15.0))
+            adv_weights = mask
             s_rep = agent.encoder(o)
     dist = agent.actor(s_rep)
     if discrete:
