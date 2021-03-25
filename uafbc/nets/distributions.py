@@ -5,25 +5,6 @@ import torch.distributions as pyd
 import torch.nn.functional as F
 import numpy as np
 
-class SimpleSquashedNormal:
-    def __init__(self, normal_dist):
-        self.dist = normal_dist
-        self.mean = normal_dist.mean
-
-    def sample(self):
-        sample = self.dist.sample()
-        return torch.tanh(sample)
-
-    def rsample(self):
-        sample = self.dist.rsample()
-        return torch.tanh(sample)
-
-    def log_prob(self, action):
-        logp_a = self.dist.log_prob(action)
-        logp_a -= 2 * (np.log(2) - action - F.softplus(-2 * action))
-        return logp_a
-
-
 class BetaDist(pyd.transformed_distribution.TransformedDistribution):
 
     class _BetaDistTransform(pyd.transforms.Transform):
@@ -37,7 +18,7 @@ class BetaDist(pyd.transformed_distribution.TransformedDistribution):
             return isinstance(other, _BetaDistTransform)
 
         def _inverse(self, y):
-            return (y.clamp(-.999, .999) + 1.0) / 2.0
+            return (y.clamp(-.99, .99) + 1.0) / 2.0
 
         def _call(self, x):
             return (2.0 * x) - 1.0
@@ -84,7 +65,7 @@ class TanhTransform(pyd.transforms.Transform):
         return x.tanh()
 
     def _inverse(self, y):
-        return self.atanh(y)
+        return self.atanh(y.clamp(-.99, .99))
 
     def log_abs_det_jacobian(self, x, y):
         return 2.0 * (math.log(2.0) - x - F.softplus(-2.0 * x))

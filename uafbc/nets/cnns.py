@@ -54,6 +54,7 @@ class BigPixelEncoder(nn.Module):
         self.fc = nn.Linear(output_height * output_width * 32, out_dim)
         self.ln = nn.LayerNorm(out_dim)
         self.apply(weight_init)
+        self.embedding_dim = out_dim
 
     def forward(self, obs):
         obs /= 255.0
@@ -90,6 +91,7 @@ class SmallPixelEncoder(nn.Module):
 
         self.fc = nn.Linear(output_height * output_width * 64, out_dim)
         self.apply(weight_init)
+        self.embedding_dim = out_dim
 
     def forward(self, obs):
         obs /= 255.0
