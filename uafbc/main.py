@@ -48,7 +48,6 @@ def uafbc(
     mlp_tau=0.005,
     encoder_tau=0.01,
     target_delay=2,
-    actor_delay=1,
     use_pg_update_online=True,
     use_bc_update_online=True,
     weighted_bellman_temp=20.0,
@@ -192,10 +191,9 @@ def uafbc(
                     done = False
                 action = agent.sample_action(state)
                 next_state, reward, done, info = train_env.step(action)
-                if infinite_bootstrap:
+                if infinite_bootstrap and steps_this_ep + 1 == max_episode_steps:
                     # allow infinite bootstrapping
-                    if steps_this_ep + 1 == max_episode_steps:
-                        done = False
+                    done = False
                 buffer.push(state, action, reward, next_state, done)
                 state = next_state
                 steps_this_ep += 1
@@ -237,7 +235,6 @@ def uafbc(
         actor_logs = {}
         for actor_update in range(actor_updates_per_step):
             if step < num_steps_offline or use_bc_update_online:
-                pass
                 actor_logs.update(
                     learning.offline_actor_update(
                         buffer=buffer,
