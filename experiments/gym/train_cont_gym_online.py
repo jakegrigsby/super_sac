@@ -5,6 +5,11 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 import gym
+try:
+    import pybullet
+    import pybulletgym
+except:
+    pass
 
 import uafbc
 from uafbc.wrappers import SimpleGymWrapper, NormActionSpace
