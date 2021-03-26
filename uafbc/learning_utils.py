@@ -128,7 +128,7 @@ def filtered_bc_loss(logs, replay_dict, agent, filter_=True, discrete=False):
         logp_a = dist.log_prob(a).sum(-1, keepdim=True)
     if filter_:
         logp_a *= adv_weights
-    loss = -(logp_a).mean()
+    loss = -(logp_a.clamp(-1000., 1000.)).mean()
     logs["filterd_bc_loss"] = loss.item()
     return loss
 

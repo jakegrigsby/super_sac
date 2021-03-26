@@ -123,7 +123,6 @@ def offline_actor_update(
     discrete=False,
     filter_=True,
 ):
-    print("offline actor update")
     logs = {}
     agent.train()
     replay_dict = lu.sample_move_and_augment(
@@ -149,7 +148,7 @@ def offline_actor_update(
     optimizer.step()
 
     lu.adjust_priorities(logs, replay_dict, agent, buffer)
-    logs["actor_loss"] = loss.item()
+    logs["offline_actor_loss"] = loss.item()
     logs["actor_offline_grad_norm"] = lu.get_grad_norm(agent.actor)
     return logs
 
