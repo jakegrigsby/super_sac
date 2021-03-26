@@ -12,13 +12,13 @@ class ContinuousStochasticActor(nn.Module):
         self,
         state_size,
         action_size,
-        log_std_low=-10,
-        log_std_high=2,
+        log_std_low=-10.,
+        log_std_high=2.,
         hidden_size=256,
         dist_impl="pyd",
     ):
         super().__init__()
-        assert dist_impl in ["pyd", "simple", "beta"]
+        assert dist_impl in ["pyd", "beta"]
         self.fc1 = nn.Linear(state_size, hidden_size)
         self.fc2 = nn.Linear(hidden_size, hidden_size)
         self.fc3 = nn.Linear(hidden_size, 2 * action_size)
@@ -39,11 +39,6 @@ class ContinuousStochasticActor(nn.Module):
             ) * (log_std + 1)
             std = log_std.exp()
             dist = distributions.SquashedNormal(mu, std)
-        elif self.dist_impl == "simple":
-            log_std = log_std.clamp(self.log_std_low, self.log_std_high)
-            std = log_std.exp()
-            base_dist = pyd.Normal(mu, std)
-            dist = distributions.SimpleSquashedNormal(base_dist)
         elif self.dist_impl == "beta":
             out = 1.0 + F.softplus(out)
             alpha, beta = out.chunk(2, dim=1)

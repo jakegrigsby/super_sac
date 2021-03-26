@@ -4,6 +4,7 @@ import math
 import os
 from itertools import chain
 import random
+import time
 
 import numpy as np
 import tensorboardX
@@ -42,12 +43,11 @@ def uafbc(
     encoder_l2=0.0,
     pop=True,
     # rl kwargs
-    init_alpha=0.01,
+    init_alpha=0.1,
     gamma=0.99,
     mlp_tau=0.005,
     encoder_tau=0.01,
     target_delay=2,
-    actor_delay=1,
     use_pg_update_online=True,
     use_bc_update_online=True,
     weighted_bellman_temp=20.0,
@@ -191,10 +191,9 @@ def uafbc(
                     done = False
                 action = agent.sample_action(state)
                 next_state, reward, done, info = train_env.step(action)
-                if infinite_bootstrap:
+                if infinite_bootstrap and steps_this_ep + 1 == max_episode_steps:
                     # allow infinite bootstrapping
-                    if steps_this_ep + 1 == max_episode_steps:
-                        done = False
+                    done = False
                 buffer.push(state, action, reward, next_state, done)
                 state = next_state
                 steps_this_ep += 1
@@ -234,8 +233,8 @@ def uafbc(
 
         # actor update
         actor_logs = {}
-        if step < num_steps_offline or use_bc_update_online:
-            for actor_update in range(actor_updates_per_step):
+        for actor_update in range(actor_updates_per_step):
+            if step < num_steps_offline or use_bc_update_online:
                 actor_logs.update(
                     learning.offline_actor_update(
                         buffer=buffer,
@@ -252,36 +251,36 @@ def uafbc(
                     )
                 )
 
-        if step >= num_steps_offline and use_pg_update_online:
-            actor_logs.update(
-                learning.online_actor_update(
-                    buffer=buffer,
-                    agent=agent,
-                    optimizer=online_actor_optimizer,
-                    log_alpha=log_alpha,
-                    batch_size=batch_size,
-                    aug_mix=aug_mix,
-                    clip=actor_clip,
-                    augmenter=augmenter,
-                    per=False,
-                    discrete=agent.discrete,
+            if step >= num_steps_offline and use_pg_update_online:
+                actor_logs.update(
+                    learning.online_actor_update(
+                        buffer=buffer,
+                        agent=agent,
+                        optimizer=online_actor_optimizer,
+                        log_alpha=log_alpha,
+                        batch_size=batch_size,
+                        aug_mix=aug_mix,
+                        clip=actor_clip,
+                        augmenter=augmenter,
+                        per=False,
+                        discrete=agent.discrete,
+                    )
                 )
-            )
 
-        if init_alpha > 0 and alpha_lr > 0:
-            actor_logs.update(
-                learning.alpha_update(
-                    buffer=buffer,
-                    agent=agent,
-                    optimizer=log_alpha_optimizer,
-                    batch_size=batch_size,
-                    log_alpha=log_alpha,
-                    augmenter=augmenter,
-                    aug_mix=aug_mix,
-                    target_entropy=target_entropy,
-                    discrete=agent.discrete,
+            if init_alpha > 0 and alpha_lr > 0:
+                actor_logs.update(
+                    learning.alpha_update(
+                        buffer=buffer,
+                        agent=agent,
+                        optimizer=log_alpha_optimizer,
+                        batch_size=batch_size,
+                        log_alpha=log_alpha,
+                        augmenter=augmenter,
+                        aug_mix=aug_mix,
+                        target_entropy=target_entropy,
+                        discrete=agent.discrete,
+                    )
                 )
-            )
 
         #############
         ## LOGGING ##

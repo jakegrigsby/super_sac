@@ -46,6 +46,7 @@ def train_minatar_online(args):
         pop=False,
         weighted_bellman_temp=None,
         weight_type=None,
+        critic_updates_per_step=1,
     )
 
 
