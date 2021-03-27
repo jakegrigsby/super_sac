@@ -128,7 +128,7 @@ def filtered_bc_loss(logs, replay_dict, agent, filter_=True, discrete=False):
         logp_a = dist.log_prob(a).sum(-1, keepdim=True)
     if filter_:
         logp_a *= adv_weights
-    loss = -(logp_a.clamp(-1000., 1000.)).mean()
+    loss = -(logp_a.clamp(-1000.0, 1000.0)).mean()
     logs["filterd_bc_loss"] = loss.item()
     return loss
 
@@ -188,9 +188,7 @@ def compute_td_targets(
             ensemble_preds = torch.stack(
                 [critic(s1_rep, a_s1) for critic in ensemble], dim=0
             )
-            val_s1 = ensemble_preds.min(0).values - (
-                log_alpha.exp() * a_dist_s1.log_prob(a_s1).sum(-1, keepdim=True)
-            )
+            val_s1 = ensemble_preds.min(0).values - (log_alpha.exp() * logp_a1)
         if agent.popart and pop:
             # denormalize target
             val_s1 = agent.popart(val_s1, normalized=False)

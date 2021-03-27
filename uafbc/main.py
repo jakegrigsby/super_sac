@@ -26,7 +26,8 @@ def uafbc(
     # compute kwargs
     num_steps_offline=1_000_000,
     num_steps_online=100_000,
-    actor_updates_per_step=1,
+    offline_actor_updates_per_step=1,
+    online_actor_updates_per_step=1,
     critic_updates_per_step=1,
     target_critic_ensemble_n=2,
     batch_size=512,
@@ -96,11 +97,13 @@ def uafbc(
         print(f"\tBC Warmup Steps: {bc_warmup_steps}")
         print(f"\tCritic Ensemble Size: {len(agent.critics)}")
         print(f"\tCritic Updates per Step: {critic_updates_per_step}")
-        print(f"\tActor Updates per Step: {actor_updates_per_step}")
+        print(f"\tActor Online Updates per Step: {online_actor_updates_per_step}")
+        print(f"\tActor Offline Updates per Step: {offline_actor_updates_per_step}")
         print(f"\tEncoder Lambda: {encoder_lambda}")
         print(f"\tActor Lambda: {actor_lambda}")
         print(f"\tDiscrete Actions: {agent.discrete}")
         print(f"\tUse PG Update Online: {use_pg_update_online}")
+        print(f"\tUse BC Update Online: {use_bc_update_online}")
         print(
             f"\tUsing Beta Dist: {not agent.discrete and agent.actor.dist_impl == 'beta'}"
         )
@@ -233,7 +236,7 @@ def uafbc(
 
         # actor update
         actor_logs = {}
-        for actor_update in range(actor_updates_per_step):
+        for actor_update in range(offline_actor_updates_per_step):
             if step < num_steps_offline or use_bc_update_online:
                 actor_logs.update(
                     learning.offline_actor_update(
@@ -251,6 +254,7 @@ def uafbc(
                     )
                 )
 
+        for actor_update in range(online_actor_updates_per_step):
             if step >= num_steps_offline and use_pg_update_online:
                 actor_logs.update(
                     learning.online_actor_update(
@@ -267,20 +271,20 @@ def uafbc(
                     )
                 )
 
-            if init_alpha > 0 and alpha_lr > 0:
-                actor_logs.update(
-                    learning.alpha_update(
-                        buffer=buffer,
-                        agent=agent,
-                        optimizer=log_alpha_optimizer,
-                        batch_size=batch_size,
-                        log_alpha=log_alpha,
-                        augmenter=augmenter,
-                        aug_mix=aug_mix,
-                        target_entropy=target_entropy,
-                        discrete=agent.discrete,
-                    )
+        if init_alpha > 0 and alpha_lr > 0:
+            actor_logs.update(
+                learning.alpha_update(
+                    buffer=buffer,
+                    agent=agent,
+                    optimizer=log_alpha_optimizer,
+                    batch_size=batch_size,
+                    log_alpha=log_alpha,
+                    augmenter=augmenter,
+                    aug_mix=aug_mix,
+                    target_entropy=target_entropy,
+                    discrete=agent.discrete,
                 )
+            )
 
         #############
         ## LOGGING ##
