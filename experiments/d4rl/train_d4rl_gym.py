@@ -56,10 +56,10 @@ def train_d4rl_gym(args):
 
     # run training
     uafbc.uafbc(
-        agent=agent, 
-        train_env=train_env, 
-        test_env=test_env, 
-        buffer=buffer, 
+        agent=agent,
+        train_env=train_env,
+        test_env=test_env,
+        buffer=buffer,
         verbosity=1,
         num_steps_offline=500_000,
         num_steps_online=0,

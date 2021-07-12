@@ -6,11 +6,11 @@ from torch import nn
 import torch.nn.functional as F
 
 import d4rl
-import afbc
+import uafbc
 import gym
 
 
-class MiniGridEncoder(afbc.nets.AFBCEncoder):
+class MiniGridEncoder(uafbc.nets.Encoder):
     def __init__(self, img_shape, emb_dim=50):
         super().__init__()
         self._dim = emb_dim
@@ -20,16 +20,16 @@ class MiniGridEncoder(afbc.nets.AFBCEncoder):
         self.conv1 = nn.Conv2d(channels, 32, kernel_size=2, stride=1)
         self.conv2 = nn.Conv2d(32, 32, kernel_size=2, stride=1)
 
-        output_height, output_width = afbc.nets.cnns.compute_conv_output(
+        output_height, output_width = uafbc.nets.cnns.compute_conv_output(
             img_shape[1:], kernel_size=(2, 2), stride=(1, 1)
         )
 
-        output_height, output_width = afbc.nets.cnns.compute_conv_output(
+        output_height, output_width = uafbc.nets.cnns.compute_conv_output(
             (output_height, output_width), kernel_size=(2, 2), stride=(1, 1)
         )
 
         self.fc = nn.Linear(output_height * output_width * 32, emb_dim)
-        self.apply(afbc.nets.weight_init)
+        self.apply(uafbc.nets.weight_init)
 
     @property
     def embedding_dim(self):
@@ -45,17 +45,17 @@ class MiniGridEncoder(afbc.nets.AFBCEncoder):
 
 
 def train_d4rl_minigrid(args):
-    train_env = afbc.wrappers.KeepKeysWrapper(gym.make(args.env), ["image"])
-    test_env = afbc.wrappers.KeepKeysWrapper(gym.make(args.env), ["image"])
+    train_env = uafbc.wrappers.KeepKeysWrapper(gym.make(args.env), ["image"])
+    test_env = uafbc.wrappers.KeepKeysWrapper(gym.make(args.env), ["image"])
     state_space = test_env.observation_space
     action_space = test_env.action_space
 
     # create agent
-    agent = afbc.AFBCAgent(
+    agent = uafbc.Agent(
         action_space.n,
         encoder=MiniGridEncoder(state_space["image"].shape),
-        actor_network_cls=afbc.nets.mlps.DiscreteActor,
-        critic_network_cls=afbc.nets.mlps.DiscreteCritic,
+        actor_network_cls=uafbc.nets.mlps.DiscreteActor,
+        critic_network_cls=uafbc.nets.mlps.DiscreteCritic,
         hidden_size=256,
         discrete=True,
     )
@@ -64,7 +64,7 @@ def train_d4rl_minigrid(args):
     dset = d4rl.qlearning_dataset(test_env)
     dset_size = dset["observations"].shape[0]
     # create replay buffer
-    buffer = afbc.replay.PrioritizedReplayBuffer(size=dset_size)
+    buffer = uafbc.replay.PrioritizedReplayBuffer(size=dset_size)
     buffer.load_experience(
         {"image": dset["observations"].astype(np.uint8)},
         np.expand_dims(dset["actions"], 1),
@@ -74,7 +74,7 @@ def train_d4rl_minigrid(args):
     )
 
     # run training
-    afbc.afbc(
+    uafbc.uafbc(
         agent=agent,
         train_env=train_env,
         test_env=test_env,
