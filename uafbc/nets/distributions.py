@@ -5,8 +5,8 @@ import torch.distributions as pyd
 import torch.nn.functional as F
 import numpy as np
 
-class BetaDist(pyd.transformed_distribution.TransformedDistribution):
 
+class BetaDist(pyd.transformed_distribution.TransformedDistribution):
     class _BetaDistTransform(pyd.transforms.Transform):
         domain = pyd.constraints.real
         codomain = pyd.constraints.interval(-1.0, 1.0)
@@ -18,7 +18,7 @@ class BetaDist(pyd.transformed_distribution.TransformedDistribution):
             return isinstance(other, _BetaDistTransform)
 
         def _inverse(self, y):
-            return (y.clamp(-.99, .99) + 1.0) / 2.0
+            return (y.clamp(-0.99, 0.99) + 1.0) / 2.0
 
         def _call(self, x):
             return (2.0 * x) - 1.0
@@ -65,7 +65,7 @@ class TanhTransform(pyd.transforms.Transform):
         return x.tanh()
 
     def _inverse(self, y):
-        return self.atanh(y.clamp(-.99, .99))
+        return self.atanh(y.clamp(-0.99, 0.99))
 
     def log_abs_det_jacobian(self, x, y):
         return 2.0 * (math.log(2.0) - x - F.softplus(-2.0 * x))

@@ -1,5 +1,6 @@
 from torch import nn
 
+
 def weight_init(m):
     if isinstance(m, nn.Linear):
         nn.init.orthogonal_(m.weight.data)
@@ -13,15 +14,15 @@ def weight_init(m):
         gain = nn.init.calculate_gain("relu")
         nn.init.orthogonal_(m.weight.data[:, :, mid, mid], gain)
 
+
 from abc import ABC, abstractmethod
 
-class Encoder(nn.Module):
 
+class Encoder(nn.Module):
     @property
     @abstractmethod
     def embedding_dim(self):
         pass
 
+
 from . import mlps, cnns, distributions
-
-

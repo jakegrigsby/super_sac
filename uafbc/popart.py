@@ -4,8 +4,6 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
-import deep_control as dc
-
 
 class PopArtLayer(nn.Module):
     def __init__(self, beta=0.01, min_steps=1000, init_nu=10 ** 6):

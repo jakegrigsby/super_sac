@@ -86,7 +86,6 @@ def critic_update(
     critic_loss = critic_loss.mean()
 
     if encoder_lambda:
-        print("lambda")
         critic_loss += encoder_lambda * lu.encoder_invariance_constraint(
             logs, replay_dict, agent
         )
@@ -96,7 +95,8 @@ def critic_update(
     critic_loss.backward()
     if critic_clip:
         torch.nn.utils.clip_grad_norm_(
-            chain(*(critic.parameters() for critic in agent.critics)), critic_clip,
+            chain(*(critic.parameters() for critic in agent.critics)),
+            critic_clip,
         )
     if encoder_clip:
         torch.nn.utils.clip_grad_norm_(agent.encoder.parameters(), encoder_clip)
@@ -178,7 +178,9 @@ def alpha_update(
     if discrete:
         alpha_loss = (log_alpha.exp() * (a_dist.entropy() + target_entropy)).mean()
     else:
-        logp_a = a_dist.log_prob(a_dist.sample()).sum(-1, keepdim=True)
+        logp_a = (
+            a_dist.log_prob(a_dist.sample()).sum(-1, keepdim=True).clamp(-100.0, 100.0)
+        )
         alpha_loss = (-log_alpha.exp() * (logp_a + target_entropy)).mean()
     optimizer.zero_grad()
     alpha_loss.backward()
@@ -199,6 +201,7 @@ def online_actor_update(
     aug_mix,
     per=False,
     discrete=False,
+    use_baseline=False,
 ):
     logs = {}
     replay_dict = lu.sample_move_and_augment(
@@ -211,12 +214,24 @@ def online_actor_update(
     a_dist = agent.actor(s_rep)
     if discrete:
         vals = torch.stack([q(s_rep) for q in agent.critics], dim=0).min(0).values
+        probs = a_dist.probs
+        if use_baseline:
+            val_baseline = (probs * vals).sum(1, keepdim=True)
+            # vals = A(s, a) = Q(s, a) - V(s)
+            vals -= val_baseline
         entropy_bonus = log_alpha.exp() * a_dist.entropy()
-        actor_loss = -((a_dist.probs * vals).sum(1) - entropy_bonus).mean()
+        actor_loss = -((probs * vals).sum(1) - entropy_bonus).mean()
     else:
         a = a_dist.rsample()
-        vals = torch.stack([q(s_rep, a) for q in agent.critics], dim=0).min(0).values
-        entropy_bonus = log_alpha.exp() * a_dist.log_prob(a).sum(-1, keepdim=True)
+        if not use_baseline:
+            vals = (
+                torch.stack([q(s_rep, a) for q in agent.critics], dim=0).min(0).values
+            )
+        else:
+            vals = agent.adv_estimator(o, a)
+        entropy_bonus = log_alpha.exp() * a_dist.log_prob(a).sum(
+            -1, keepdim=True
+        ).clamp(-1000.0, 1000.0)
         actor_loss = -(vals - entropy_bonus).mean()
 
     optimizer.zero_grad()

@@ -55,6 +55,7 @@ def train_dmc_sil(args):
         use_bc_update_online=True,
         actor_lr=1e-4,
         critic_lr=1e-4,
+        actor_clip=10.,
         batch_size=512,
         weighted_bellman_temp=None,
         weight_type=None,

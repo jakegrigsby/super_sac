@@ -61,28 +61,29 @@ class AdvantageEstimator(nn.Module):
         return adv
 
     def continuous_forward(self, obs, action, n=4):
-        # get an action distribution from the policy
-        state_rep = self.encoder(obs)
-        act_dist = self.actor(state_rep)
-        actions = [act_dist.sample() for _ in range(n)]
-
-        # get the q value for each of the n actions
-        qs = []
-        for act in actions:
-            q_a_preds = (
-                torch.stack(
-                    [self.pop(critic, state_rep, act) for critic in self.critics], dim=0
+        with torch.no_grad():
+            # get an action distribution from the policy
+            state_rep = self.encoder(obs)
+            act_dist = self.actor(state_rep)
+            actions = [act_dist.sample() for _ in range(n)]
+            # get the q value for each of the n actions
+            qs = []
+            for act in actions:
+                q_a_preds = (
+                    torch.stack(
+                        [self.pop(critic, state_rep, act) for critic in self.critics],
+                        dim=0,
+                    )
+                    .min(0)
+                    .values
                 )
-                .min(0)
-                .values
-            )
-            qs.append(q_a_preds)
-        if self.cont_method == "mean":
-            # V(s) = E_{a ~ \pi(s)} [Q(s, a)]
-            value = torch.stack(qs, dim=0).mean(0)
-        elif self.cont_method == "max":
-            # Optimisitc value estimate: V(s) = max_{a1, a2, a3, ..., aN}(Q(s, a))
-            value = torch.stack(qs, dim=0).max(0).values
+                qs.append(q_a_preds)
+            if self.cont_method == "mean":
+                # V(s) = E_{a ~ \pi(s)} [Q(s, a)]
+                value = torch.stack(qs, dim=0).mean(0)
+            elif self.cont_method == "max":
+                # Optimisitc value estimate: V(s) = max_{a1, a2, a3, ..., aN}(Q(s, a))
+                value = torch.stack(qs, dim=0).max(0).values
         q_preds = (
             torch.stack(
                 [self.pop(critic, state_rep, action) for critic in self.critics], dim=0

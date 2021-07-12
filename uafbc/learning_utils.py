@@ -99,7 +99,9 @@ def sample_move_and_augment(buffer, batch_size, augmenter, aug_mix, per=True):
 
 
 def compute_filter_stats(
-    buffer, agent, batch_size,
+    buffer,
+    agent,
+    batch_size,
 ):
     batch, _ = buffer.sample_uniform(batch_size)
     o, a, *_ = batch
@@ -128,7 +130,7 @@ def filtered_bc_loss(logs, replay_dict, agent, filter_=True, discrete=False):
         logp_a = dist.log_prob(a).sum(-1, keepdim=True)
     if filter_:
         logp_a *= adv_weights
-    loss = -(logp_a.clamp(-1000.0, 1000.0)).mean()
+    loss = -(logp_a.clamp(-100.0, 100.0)).mean()
     logs["filterd_bc_loss"] = loss.item()
     return loss
 
@@ -176,7 +178,8 @@ def compute_td_targets(
         ensemble = random.sample(target_agent.critics, ensemble_n)
         if discrete:
             ensemble_preds = torch.stack(
-                [critic(s1_rep) for critic in ensemble], dim=0,
+                [critic(s1_rep) for critic in ensemble],
+                dim=0,
             )
             s1_q_pred = ensemble_preds.min(0).values
             val_s1 = (a_dist_s1.probs * s1_q_pred).sum(1, keepdim=True) - (

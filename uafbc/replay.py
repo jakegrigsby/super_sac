@@ -86,6 +86,8 @@ class ReplayBufferStorage:
             state[label] = self.s_stack[label][indices].float()
             next_state[label] = self.s1_stack[label][indices].float()
         action = self.action_stack[indices].float()
+        if action.dim() < 2:
+            action = action.unsqueeze(1)
         reward = self.reward_stack[indices]
         done = self.done_stack[indices]
         return (state, action, reward, next_state, done)
@@ -117,7 +119,9 @@ class ReplayBuffer:
                 act_example = action
                 state_example = state
             self._storage = ReplayBufferStorage(
-                self._maxsize, state_example=state_example, act_example=act_example,
+                self._maxsize,
+                state_example=state_example,
+                act_example=act_example,
             )
         return self._storage.add(state, action, reward, next_state, done)
 

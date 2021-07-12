@@ -22,7 +22,10 @@ def add_args(parser):
         be set higher for repaly ratios < 1",
     )
     parser.add_argument(
-        "--max_episode_steps", type=int, default=1000, help="maximum steps per episode",
+        "--max_episode_steps",
+        type=int,
+        default=1000,
+        help="maximum steps per episode",
     )
     parser.add_argument(
         "--batch_size", type=int, default=1024, help="training batch size"
@@ -162,7 +165,8 @@ def add_args(parser):
         help="how many critics in the ensemble",
     )
     parser.add_argument(
-        "--no_filter", action="store_true",
+        "--no_filter",
+        action="store_true",
     )
     parser.add_argument("--art", action="store_true")
     parser.add_argument(

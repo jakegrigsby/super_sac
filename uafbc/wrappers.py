@@ -7,7 +7,10 @@ class NormActionSpace(gym.ActionWrapper):
         super().__init__(env)
         self._true_action_space = env.action_space
         self.action_space = gym.spaces.Box(
-            low=-1.0, high=1.0, shape=self._true_action_space.shape, dtype=np.float32,
+            low=-1.0,
+            high=1.0,
+            shape=self._true_action_space.shape,
+            dtype=np.float32,
         )
 
     def action(self, action):

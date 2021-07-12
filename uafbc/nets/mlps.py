@@ -12,8 +12,8 @@ class ContinuousStochasticActor(nn.Module):
         self,
         state_size,
         action_size,
-        log_std_low=-10.,
-        log_std_high=2.,
+        log_std_low=-10.0,
+        log_std_high=2.0,
         hidden_size=256,
         dist_impl="pyd",
     ):

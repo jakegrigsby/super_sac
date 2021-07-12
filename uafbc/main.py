@@ -78,17 +78,16 @@ def uafbc(
 
     assert isinstance(buffer, replay.PrioritizedReplayBuffer)
 
-    if augmenter is None:
-        augmenter = augmentations.AugmentationSequence(
-            [augmentations.IdentityAug(batch_size)]
-        )
-
     if save_to_disk or log_to_disk:
         save_dir = make_process_dirs(name)
     if log_to_disk:
         writer = tensorboardX.SummaryWriter(save_dir)
-        writer.add_hparams(locals(), {})
+        # writer.add_hparams(locals(), {})
 
+    if augmenter is None:
+        augmenter = augmentations.AugmentationSequence(
+            [augmentations.IdentityAug(batch_size)]
+        )
     if verbosity:
         print(" ----- AFBC -----")
         print(f"\tART: {agent.popart is not False}")
@@ -268,6 +267,8 @@ def uafbc(
                         augmenter=augmenter,
                         per=False,
                         discrete=agent.discrete,
+                        # use_baseline=True,
+                        use_baseline=False,
                     )
                 )
 

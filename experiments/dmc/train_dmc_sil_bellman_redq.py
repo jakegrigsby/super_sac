@@ -24,7 +24,7 @@ class IdentityEncoder(uafbc.nets.Encoder):
         return obs_dict["obs"]
 
 
-def train_dmc_online(args):
+def train_dmc_sil(args):
     train_env = SimpleGymWrapper(dmc2gym.make(args.domain, args.task))
     test_env = SimpleGymWrapper(dmc2gym.make(args.domain, args.task))
 
@@ -34,11 +34,11 @@ def train_dmc_online(args):
         encoder=IdentityEncoder(train_env.observation_space.shape[0]),
         actor_network_cls=uafbc.nets.mlps.ContinuousStochasticActor,
         critic_network_cls=uafbc.nets.mlps.ContinuousCritic,
-        critic_ensemble_size=2,
+        critic_ensemble_size=5,
         hidden_size=1024,
         discrete=False,
         auto_rescale_targets=False,
-        beta_dist=True,
+        beta_dist=False,
     )
 
     buffer = uafbc.replay.PrioritizedReplayBuffer(size=1_000_000)
@@ -52,13 +52,13 @@ def train_dmc_online(args):
         verbosity=1,
         name=args.name,
         use_pg_update_online=True,
+        use_bc_update_online=True,
+        critic_updates_per_step=2,
         actor_lr=1e-4,
         critic_lr=1e-4,
-        encoder_lr=1e-4,
         batch_size=512,
-        weighted_bellman_temp=None,
-        weight_type=None,
-        use_bc_update_online=False,
+        weighted_bellman_temp=(1./15.),
+        weight_type="softmax",
         num_steps_offline=0,
         num_steps_online=1_000_000,
         random_warmup_steps=10_000,
@@ -71,6 +71,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--domain", type=str, default="walker")
     parser.add_argument("--task", type=str, default="walk")
-    parser.add_argument("--name", type=str, default="uafbc_adv_baseline_beta_dist_walker_walk")
+    parser.add_argument("--name", type=str, default="uafbc_sil_bellman_softmax_5cri_dmc_run")
     args = parser.parse_args()
-    train_dmc_online(args)
+    train_dmc_sil(args)
