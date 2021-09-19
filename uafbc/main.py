@@ -88,25 +88,25 @@ def uafbc(
         augmenter = augmentations.AugmentationSequence(
             [augmentations.IdentityAug(batch_size)]
         )
-    if verbosity:
-        print(" ----- AFBC -----")
-        print(f"\tART: {agent.popart is not False}")
-        print(f"\tPOP: {pop}")
-        print(f"\tBellman Backup Weight type: {weight_type}")
-        print(f"\tBC Warmup Steps: {bc_warmup_steps}")
-        print(f"\tCritic Ensemble Size: {len(agent.critics)}")
-        print(f"\tCritic Updates per Step: {critic_updates_per_step}")
-        print(f"\tActor Online Updates per Step: {online_actor_updates_per_step}")
-        print(f"\tActor Offline Updates per Step: {offline_actor_updates_per_step}")
-        print(f"\tEncoder Lambda: {encoder_lambda}")
-        print(f"\tActor Lambda: {actor_lambda}")
-        print(f"\tDiscrete Actions: {agent.discrete}")
-        print(f"\tUse PG Update Online: {use_pg_update_online}")
-        print(f"\tUse BC Update Online: {use_bc_update_online}")
-        print(
-            f"\tUsing Beta Dist: {not agent.discrete and agent.actor.dist_impl == 'beta'}"
-        )
-        print(" -----      -----")
+    qprint = lambda x: print(x) if verbosity else None
+    qprint(" ----- AFBC -----")
+    qprint(f"\tART: {agent.popart is not False}")
+    qprint(f"\tPOP: {pop}")
+    qprint(f"\tBellman Backup Weight type: {weight_type}")
+    qprint(f"\tBC Warmup Steps: {bc_warmup_steps}")
+    qprint(f"\tCritic Ensemble Size: {len(agent.critics)}")
+    qprint(f"\tCritic Updates per Step: {critic_updates_per_step}")
+    qprint(f"\tActor Online Updates per Step: {online_actor_updates_per_step}")
+    qprint(f"\tActor Offline Updates per Step: {offline_actor_updates_per_step}")
+    qprint(f"\tEncoder Lambda: {encoder_lambda}")
+    qprint(f"\tActor Lambda: {actor_lambda}")
+    qprint(f"\tDiscrete Actions: {agent.discrete}")
+    qprint(f"\tUse PG Update Online: {use_pg_update_online}")
+    qprint(f"\tUse BC Update Online: {use_bc_update_online}")
+    qprint(
+        f"\tUsing Beta Dist: {not agent.discrete and agent.actor.dist_impl == 'beta'}"
+    )
+    qprint(" -----      -----")
 
     ###########
     ## SETUP ##
@@ -161,7 +161,6 @@ def uafbc(
     ###################
     total_steps = num_steps_offline + num_steps_online
     progress_bar = lambda x: tqdm.tqdm(range(x)) if verbosity else range(x)
-    qprint = lambda x: print(x) if verbosity else None
 
     lu.warmup_buffer(buffer, train_env, random_warmup_steps, max_episode_steps)
 

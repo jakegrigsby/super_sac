@@ -115,7 +115,7 @@ def compute_filter_stats(
 
 
 def filtered_bc_loss(logs, replay_dict, agent, filter_=True, discrete=False):
-    o, a, *_ = replay_dict["primary_batch"]
+    print("filtered bc")
     if filter_:
         with torch.no_grad():
             adv = agent.adv_estimator(o, a)
