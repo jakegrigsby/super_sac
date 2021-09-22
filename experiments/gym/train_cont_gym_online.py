@@ -5,6 +5,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 import gym
+
 try:
     import pybullet
     import pybulletgym
@@ -64,12 +65,13 @@ def train_cont_gym_online(args):
         weighted_bellman_temp=None,
         weight_type=None,
         use_bc_update_online=False,
+        bc_warmup_steps=0,
         num_steps_offline=0,
         num_steps_online=1_000_000,
         random_warmup_steps=10_000,
         max_episode_steps=1000,
         pop=False,
-        init_alpha=.1,
+        init_alpha=0.1,
         alpha_lr=1e-4,
     )
 
