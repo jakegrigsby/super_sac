@@ -162,7 +162,8 @@ def uafbc(
     total_steps = num_steps_offline + num_steps_online
     progress_bar = lambda x: tqdm.tqdm(range(x)) if verbosity else range(x)
 
-    lu.warmup_buffer(buffer, train_env, random_warmup_steps, max_episode_steps)
+    if random_warmup_steps:
+        lu.warmup_buffer(buffer, train_env, random_warmup_steps, max_episode_steps)
 
     # behavioral cloning
     for _ in progress_bar(bc_warmup_steps):

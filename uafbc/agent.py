@@ -18,7 +18,6 @@ class Agent:
         critic_network_cls,
         discrete=False,
         critic_ensemble_size=5,
-        embedding_size=50,
         hidden_size=256,
         auto_rescale_targets=True,
         log_std_low=-10.0,
