@@ -174,19 +174,20 @@ class DrqAug:
         self.w1 = torch.randint(0, self.pad * 2, (self.batch_size,))
         self.h1 = torch.randint(0, self.pad * 2, (self.batch_size,))
 
-    def random_crop(self, imgs, out):
+    def random_crop(self, imgs, h_out, w_out):
         b, c, h, w = imgs.shape
-        crop_max = h - out + 1
-        cropped = torch.zeros((b, c, out, out), dtype=torch.float32)
+        crop_max_h = h - h_out + 1
+        crop_max_w = w - w_out + 1
+        cropped = torch.zeros((b, c, h_out, w_out), dtype=torch.float32)
         for i, (img, w11, h11) in enumerate(zip(imgs, self.w1, self.h1)):
-            cropped[i] = img[:, h11 : h11 + out, w11 : w11 + out]
+            cropped[i] = img[:, h11 : h11 + h_out, w11 : w11 + w_out]
         return cropped
 
     def __call__(self, imgs):
         b, c, h, w = imgs.shape
         og_device = imgs.device
         padded = self.pad_func(imgs)
-        cropped = self.random_crop(padded, out=h).to(og_device)
+        cropped = self.random_crop(padded, h_out=h, w_out=w).to(og_device)
         if self.noise:
             cropped += torch.randn_like(cropped)
         return cropped.clamp(0, 255.0)
