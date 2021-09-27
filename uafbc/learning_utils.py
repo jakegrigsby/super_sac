@@ -65,7 +65,6 @@ def _move_dict_to_device(dict_):
 
 
 def sample_move_and_augment(buffer, batch_size, augmenter, aug_mix, per=True):
-    assert isinstance(buffer, replay.PrioritizedReplayBuffer)
     if per:
         batch, imp_weights, priority_idxs = buffer.sample(batch_size)
     else:

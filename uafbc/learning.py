@@ -147,7 +147,8 @@ def offline_actor_update(
         torch.nn.utils.clip_grad_norm_(agent.actor.parameters(), clip)
     optimizer.step()
 
-    lu.adjust_priorities(logs, replay_dict, agent, buffer)
+    if per:
+        lu.adjust_priorities(logs, replay_dict, agent, buffer)
     logs["offline_actor_loss"] = loss.item()
     logs["actor_offline_grad_norm"] = lu.get_grad_norm(agent.actor)
     return logs

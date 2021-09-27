@@ -45,6 +45,7 @@ def uafbc(
     pop=True,
     # rl kwargs
     init_alpha=0.1,
+    target_entropy_mul=1.0,
     gamma=0.99,
     mlp_tau=0.005,
     encoder_tau=0.01,
@@ -75,8 +76,6 @@ def uafbc(
     save_interval=5000,
     verbosity=0,
 ):
-
-    assert isinstance(buffer, replay.PrioritizedReplayBuffer)
 
     if save_to_disk or log_to_disk:
         save_dir = make_process_dirs(name)
@@ -155,6 +154,7 @@ def uafbc(
         target_entropy = -math.log(1.0 / train_env.action_space.n) * 0.98
     else:
         target_entropy = -train_env.action_space.shape[0]
+    target_entropy *= target_entropy_mul
 
     ###################
     ## TRAINING LOOP ##
@@ -166,8 +166,8 @@ def uafbc(
         lu.warmup_buffer(buffer, train_env, random_warmup_steps, max_episode_steps)
 
     # behavioral cloning
-    for _ in progress_bar(bc_warmup_steps):
-        learning.offline_actor_update(
+    for step in progress_bar(bc_warmup_steps):
+        bc_logs = learning.offline_actor_update(
             buffer=buffer,
             agent=agent,
             optimizer=offline_actor_optimizer,
@@ -180,6 +180,21 @@ def uafbc(
             discrete=agent.discrete,
             filter_=False,
         )
+
+        if (step % log_interval == 0) and log_to_disk:
+            for key, val in bc_logs.items():
+                writer.add_scalar(key, val, step)
+
+        if (
+            (step % eval_interval == 0) or (step == total_steps - 1)
+        ) and eval_interval > 0:
+            mean_return = evaluation.evaluate_agent(
+                agent, test_env, eval_episodes, max_episode_steps, render
+            )
+            if log_to_disk:
+                writer.add_scalar("return", mean_return, step)
+        if step % save_interval == 0 and save_to_disk:
+            agent.save(save_dir)
 
     qprint("\tRegular Training Begins...")
     done = True
@@ -296,7 +311,9 @@ def uafbc(
             for key, val in actor_logs.items():
                 writer.add_scalar(key, val, step)
 
-        if (step % eval_interval == 0) or (step == total_steps - 1):
+        if (
+            (step % eval_interval == 0) or (step == total_steps - 1)
+        ) and eval_interval > 0:
             mean_return = evaluation.evaluate_agent(
                 agent, test_env, eval_episodes, max_episode_steps, render
             )
