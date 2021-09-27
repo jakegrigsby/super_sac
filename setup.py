@@ -9,4 +9,15 @@ setup(
     author_email="jcg6dn@virginia.edu",
     license="MIT",
     packages=find_packages(),
+    install_requires=[
+        "gym",
+        "numpy",
+        "torch",
+        "torchvision",
+        "tqdm",
+        "opencv-python",
+        "Pillow",
+        "scikit-image",
+        "tensorboardX",
+    ],
 )

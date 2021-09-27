@@ -1,0 +1,9 @@
+gym
+numpy
+torch
+torchvision
+tqdm
+opencv-python
+Pillow
+scikit-image
+
