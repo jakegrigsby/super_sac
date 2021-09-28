@@ -114,8 +114,7 @@ def compute_filter_stats(
 
 
 def filtered_bc_loss(logs, replay_dict, agent, filter_=True, discrete=False):
-    o, *_ = replay_dict["augmented_obs"]
-    _, a, *_ = replay_dict["primary_batch"]
+    o, a, *_ = replay_dict["primary_batch"]
     if filter_:
         with torch.no_grad():
             adv = agent.adv_estimator(o, a)
@@ -170,8 +169,7 @@ def compute_td_targets(
     gamma,
     discrete=False,
 ):
-    _, a, r, _, d = replay_dict["primary_batch"]
-    o, o1 = replay_dict["augmented_obs"]
+    o, a, r, o1, d = replay_dict["primary_batch"]
     with torch.no_grad():
         s1_rep = target_agent.encoder(o1)
         a_dist_s1 = agent.actor(s1_rep)
@@ -220,8 +218,7 @@ def compute_backup_weights(
     if weight_type is None or weight_temp is None:
         return 1.0
 
-    _, a, *_ = replay_dict["primary_batch"]
-    o, o1 = replay_dict["augmented_obs"]
+    o, a, _, o1, _ = replay_dict["primary_batch"]
     with torch.no_grad():
         if weight_type == "sunrise":
             s_rep = target_agent.encoder(o)
