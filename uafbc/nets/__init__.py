@@ -22,7 +22,7 @@ class Encoder(nn.Module):
     @property
     @abstractmethod
     def embedding_dim(self):
-        pass
+        raise NotImplementedError
 
 
 from . import mlps, cnns, distributions
