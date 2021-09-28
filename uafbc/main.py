@@ -238,6 +238,7 @@ def uafbc(
                 aug_mix=aug_mix,
                 discrete=agent.discrete,
                 per=False,
+                update_priorities=step < num_steps_offline or use_bc_update_online,
             )
 
             # move target model towards training model

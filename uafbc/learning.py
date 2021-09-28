@@ -35,14 +35,16 @@ def critic_update(
     aug_mix=0.75,
     discrete=False,
     per=False,
+    update_priorities=False,
 ):
-
-    agent.train()
-
     logs = {}
 
     replay_dict = lu.sample_move_and_augment(
-        buffer, batch_size, augmenter, aug_mix, per=per
+        buffer,
+        batch_size,
+        augmenter,
+        aug_mix,
+        per=per,
     )
 
     td_target = lu.compute_td_targets(
@@ -106,7 +108,8 @@ def critic_update(
     logs["random_critic_grad_norm"] = lu.get_grad_norm(random.choice(agent.critics))
     logs["encoder_grad_norm"] = lu.get_grad_norm(agent.encoder)
     logs["critic_loss"] = critic_loss
-    lu.adjust_priorities(logs, replay_dict, agent, buffer)
+    if update_priorities:
+        lu.adjust_priorities(logs, replay_dict, agent, buffer)
     return logs
 
 
@@ -124,7 +127,6 @@ def offline_actor_update(
     filter_=True,
 ):
     logs = {}
-    agent.train()
     replay_dict = lu.sample_move_and_augment(
         buffer=buffer,
         batch_size=batch_size,
@@ -243,5 +245,4 @@ def online_actor_update(
 
     logs["actor_online_loss"] = actor_loss.item()
     logs["actor_online_grad_norm"] = lu.get_grad_norm(agent.actor)
-    lu.adjust_priorities(logs, replay_dict, agent, buffer)
     return logs
