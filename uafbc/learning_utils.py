@@ -185,10 +185,11 @@ def compute_td_targets(
                 dim=0,
             )
             s1_q_pred = ensemble_preds.min(0).values
-            val_s1 = (
-                a_dist_s1.probs
-                * (s1_q_pred - log_alpha.exp() * torch.log(a_dist_s1.probs))
-            ).sum(1, keepdim=True)
+            probs = a_dist_s1.probs
+            log_probs = torch.log_softmax(a_dist_s1.logits, dim=1)
+            val_s1 = (probs * (s1_q_pred - log_alpha.exp() * log_probs)).sum(
+                1, keepdim=True
+            )
         else:
             a_s1 = a_dist_s1.sample()
             logp_a1 = a_dist_s1.log_prob(a_s1).sum(-1, keepdim=True)
