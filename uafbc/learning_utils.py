@@ -27,7 +27,7 @@ def get_grad_norm(model):
     return total_norm
 
 
-def warmup_buffer(buffer, env, warmup_steps, max_episode_steps):
+def warmup_buffer(buffer, env, warmup_steps, max_episode_steps, actors=1):
     # use warmp up steps to add random transitions to the buffer
     state = env.reset()
     done = False
@@ -42,8 +42,12 @@ def warmup_buffer(buffer, env, warmup_steps, max_episode_steps):
             rand_action = np.array(float(rand_action))
             if len(rand_action.shape) == 0:
                 rand_action = np.expand_dims(rand_action, 0)
+        if actors > 1:
+            rand_action = np.array([rand_action for _ in range(actors)])
         next_state, reward, done, info = env.step(rand_action)
         buffer.push(state, rand_action, reward, next_state, done)
+        if actors > 1:
+            done = done.any()
         state = next_state
         steps_this_ep += 1
         if steps_this_ep >= max_episode_steps:
@@ -181,9 +185,10 @@ def compute_td_targets(
                 dim=0,
             )
             s1_q_pred = ensemble_preds.min(0).values
-            val_s1 = (a_dist_s1.probs * s1_q_pred).sum(1, keepdim=True) - (
-                log_alpha.exp() * a_dist_s1.entropy()
-            ).unsqueeze(1)
+            val_s1 = (
+                a_dist_s1.probs
+                * (s1_q_pred - log_alpha.exp() * torch.log(a_dist_s1.probs))
+            ).sum(1, keepdim=True)
         else:
             a_s1 = a_dist_s1.sample()
             logp_a1 = a_dist_s1.log_prob(a_s1).sum(-1, keepdim=True)

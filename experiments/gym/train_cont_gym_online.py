@@ -6,14 +6,11 @@ from torch import nn
 import torch.nn.functional as F
 import gym
 
-try:
-    import pybullet
-    import pybulletgym
-except:
-    pass
+import pybullet
+import pybullet_envs
 
 import uafbc
-from uafbc.wrappers import SimpleGymWrapper, NormActionSpace
+from uafbc.wrappers import SimpleGymWrapper, NormActionSpace, ParallelActors
 
 
 class IdentityEncoder(uafbc.nets.Encoder):
@@ -31,8 +28,12 @@ class IdentityEncoder(uafbc.nets.Encoder):
 
 
 def train_cont_gym_online(args):
-    train_env = SimpleGymWrapper(NormActionSpace(gym.make(args.env)))
-    test_env = SimpleGymWrapper(NormActionSpace(gym.make(args.env)))
+
+    def make_env():
+        return NormActionSpace(gym.make(args.env))
+
+    train_env = SimpleGymWrapper(ParallelActors(make_env, args.actors))
+    test_env = SimpleGymWrapper(make_env())
 
     # create agent
     agent = uafbc.Agent(
@@ -80,5 +81,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--env", type=str, default="Pendulum-v0")
     parser.add_argument("--name", type=str, default="uafbc_pendulum_run")
+    parser.add_argument("--actors", type=int, default=1)
     args = parser.parse_args()
     train_cont_gym_online(args)

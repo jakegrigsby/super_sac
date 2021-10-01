@@ -31,7 +31,7 @@ class ContinuousStochasticActor(nn.Module):
         x = F.relu(self.fc1(state))
         x = F.relu(self.fc2(x))
         out = self.fc3(x)
-        mu, log_std = out.chunk(2, dim=1)
+        mu, log_std = out.chunk(2, dim=-1)
         if self.dist_impl == "pyd":
             log_std = torch.tanh(log_std)
             log_std = self.log_std_low + 0.5 * (
@@ -41,7 +41,7 @@ class ContinuousStochasticActor(nn.Module):
             dist = distributions.SquashedNormal(mu, std)
         elif self.dist_impl == "beta":
             out = 1.0 + F.softplus(out)
-            alpha, beta = out.chunk(2, dim=1)
+            alpha, beta = out.chunk(2, dim=-1)
             dist = distributions.BetaDist(alpha, beta)
         return dist
 
@@ -68,7 +68,7 @@ class ContinuousCritic(nn.Module):
         self.out = nn.Linear(hidden_size, 1)
 
     def forward(self, state, action):
-        x = torch.cat((state, action), dim=1)
+        x = torch.cat((state, action), dim=-1)
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         val = self.out(x)
@@ -85,7 +85,7 @@ class DiscreteActor(nn.Module):
     def forward(self, state):
         x = F.relu(self.fc1(state))
         x = F.relu(self.fc2(x))
-        act_p = F.softmax(self.act_p(x), dim=1)
+        act_p = F.softmax(self.act_p(x), dim=-1)
         dist = pyd.categorical.Categorical(act_p)
         return dist
 
