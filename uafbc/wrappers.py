@@ -5,6 +5,34 @@ import gym
 import numpy as np
 
 
+def ParallelActors(make_env, actors):
+    try:
+        from stable_baselines3.common.vec_env import SubprocVecEnv
+    except ImportError:
+        raise ImportError(
+            "Missing stable_baselines3 for parallel env. `pip install stable_baselines3`"
+        )
+
+    class _Compatible(gym.Wrapper):
+        def __init__(self, env):
+            if not hasattr(env, "reward_range"):
+                env.reward_range = None
+            self._PARALLEL_ACTORS = actors
+            super().__init__(env)
+
+        def step(self, action):
+            s, r, d, i = self.env.step(action)
+            return s, self.expand(r), self.expand(d), i
+
+        def expand(self, x):
+            return np.expand_dims(np.array(x), 1)
+
+    if actors > 1:
+        return _Compatible(SubprocVecEnv([make_env for _ in range(actors)]))
+    else:
+        return make_env()
+
+
 class NormActionSpace(gym.ActionWrapper):
     def __init__(self, env):
         super().__init__(env)

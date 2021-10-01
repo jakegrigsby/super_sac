@@ -113,6 +113,21 @@ def uafbc(
     agent.to(device)
     agent.train()
 
+    def _get_actors(env):
+        _env = env
+        while hasattr(_env, "env"):
+            if hasattr(_env, "_PARALLEL_ACTORS"):
+                return _env._PARALLEL_ACTORS
+            else:
+                _env = _env.env
+        return 1
+
+    actors = _get_actors(train_env)
+    qprint(f"Detected {actors} training actors.")
+    assert (
+        _get_actors(test_env) == 1
+    ), "Evaluation Envs are not compatible with parallel sampling."
+
     # create target networks
     target_agent = copy.deepcopy(agent)
     target_agent.to(device)
@@ -163,7 +178,9 @@ def uafbc(
     progress_bar = lambda x: tqdm.tqdm(range(x)) if verbosity else range(x)
 
     if random_warmup_steps:
-        lu.warmup_buffer(buffer, train_env, random_warmup_steps, max_episode_steps)
+        lu.warmup_buffer(
+            buffer, train_env, random_warmup_steps, max_episode_steps, actors=actors
+        )
 
     # behavioral cloning
     for step in progress_bar(bc_warmup_steps):
@@ -206,12 +223,18 @@ def uafbc(
                     state = train_env.reset()
                     steps_this_ep = 0
                     done = False
-                action = agent.sample_action(state)
+                action = agent.sample_action(state, from_cpu=True, actors=actors)
                 next_state, reward, done, info = train_env.step(action)
                 if infinite_bootstrap and steps_this_ep + 1 == max_episode_steps:
                     # allow infinite bootstrapping
-                    done = False
+                    done = (
+                        np.expand_dims(np.array([False for _ in range(actors)]), 1)
+                        if actors > 1
+                        else False
+                    )
                 buffer.push(state, action, reward, next_state, done)
+                if actors > 1:
+                    done = done.any()
                 state = next_state
                 steps_this_ep += 1
                 if steps_this_ep >= max_episode_steps:

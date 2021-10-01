@@ -164,26 +164,29 @@ class Agent:
         else:
             return self.continuous_forward(state, from_cpu)
 
-    def sample_action(self, obs, from_cpu=True):
+    def sample_action(self, obs, from_cpu=True, actors=1):
         if from_cpu:
-            obs = self._process_obs(obs)
+            obs = self._process_obs(obs, actors)
         self.eval()
         with torch.no_grad():
             state_rep = self.encoder.forward(obs)
             act_dist = self.actor.forward(state_rep)
             act = act_dist.sample()
+            if self.discrete and actors > 1:
+                act = act.unsqueeze(-1)
         self.train()
         if from_cpu:
-            act = self._process_act(act)
+            act = self._process_act(act, actors)
         return act
 
-    def _process_obs(self, obs):
+    def _process_obs(self, obs, actors=1):
+        unsqueeze = lambda tens: tens.unsqueeze(0) if actors == 1 else tens
         return {
-            x: torch.from_numpy(y).unsqueeze(0).float().to(device)
-            for x, y in obs.items()
+            x: unsqueeze(torch.from_numpy(y)).float().to(device) for x, y in obs.items()
         }
 
-    def _process_act(self, act):
+    def _process_act(self, act, actors=1):
+        squeeze = lambda tens: tens.squeeze(0) if actors == 1 else tens
         if not self.discrete:
-            act = act.squeeze(0).clamp(-1.0, 1.0)
+            act = squeeze(act).clamp(-1.0, 1.0)
         return act.cpu().numpy()
