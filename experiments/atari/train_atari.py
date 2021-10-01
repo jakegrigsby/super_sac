@@ -25,12 +25,13 @@ class AtariEncoder(nets.Encoder):
 
 
 def train_atari(args):
+    def make_env():
+        return uafbc.wrappers.load_atari(args.game, frame_skip=4)
+
     train_env = uafbc.wrappers.SimpleGymWrapper(
-        uafbc.wrappers.load_atari(args.game, frame_skip=4)
+        uafbc.wrappers.ParallelActors(make_env, args.actors)
     )
-    test_env = uafbc.wrappers.SimpleGymWrapper(
-        uafbc.wrappers.load_atari(args.game, frame_skip=4)
-    )
+    test_env = uafbc.wrappers.SimpleGymWrapper(make_env())
 
     # create agent
     img_shape = train_env.observation_space.shape
@@ -61,7 +62,7 @@ def train_atari(args):
         num_steps_offline=0,
         num_steps_online=args.steps,
         random_warmup_steps=10_000,
-        max_episode_steps=108_000,
+        max_episode_steps=100,
         actor_clip=10.0,
         critic_clip=10.0,
         encoder_clip=10.0,
@@ -85,5 +86,6 @@ if __name__ == "__main__":
     parser.add_argument("--game", type=str, default="PongNoFrameskip-v4")
     parser.add_argument("--steps", type=int, default=10_000_000)
     parser.add_argument("--popart", action="store_true")
+    parser.add_argument("--actors", type=int, default=1)
     args = parser.parse_args()
     train_atari(args)
