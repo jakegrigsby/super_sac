@@ -62,7 +62,7 @@ def train_atari(args):
         num_steps_offline=0,
         num_steps_online=args.steps,
         random_warmup_steps=10_000,
-        max_episode_steps=100,
+        max_episode_steps=108_000,
         actor_clip=10.0,
         critic_clip=10.0,
         encoder_clip=10.0,
