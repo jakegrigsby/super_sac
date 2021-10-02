@@ -8,23 +8,23 @@ from minatar import Environment
 from uafbc import nets
 
 
-class MinAtarEnv:
+class MinAtarEnv(gym.Wrapper):
     def __init__(self, *args, **kwargs):
         self.env = Environment(*args, **kwargs)
-        self.action_space = gym.spaces.Discrete(6)
-
-    def _state(self):
-        return {"obs": self.env.state().astype(np.uint8)}
+        self.env.action_space = gym.spaces.Discrete(6)
+        self.env.observation_space = None
+        self.env.reward_range = None
+        self.env.metadata = None
+        super().__init__(self.env)
 
     def reset(self):
         self.env.reset()
-        return self._state()
+        return self.env.state().astype(np.uint8)
 
     def step(self, act):
-        if isinstance(act, np.ndarray):
-            act = int(act)
         reward, done = self.env.act(act)
-        return self._state(), reward, done, {}
+        state = self.env.state().astype(np.uint8)
+        return state, reward, done, {}
 
     @property
     def num_channels(self):

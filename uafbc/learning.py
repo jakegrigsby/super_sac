@@ -179,10 +179,8 @@ def alpha_update(
     with torch.no_grad():
         a_dist = agent.actor(agent.encoder(o))
     if discrete:
-        alpha_loss = -(
-            log_alpha.exp()
-            * (target_entropy + (a_dist.probs * torch.log(a_dist.probs)).sum(1))
-        ).mean()
+        entropy = -(a_dist.probs * torch.log_softmax(a_dist.logits, dim=1)).sum(1)
+        alpha_loss = -(log_alpha * (target_entropy - entropy)).mean()
     else:
         logp_a = (
             a_dist.log_prob(a_dist.sample()).sum(-1, keepdim=True).clamp(-100.0, 100.0)
@@ -221,11 +219,12 @@ def online_actor_update(
     if discrete:
         vals = torch.stack([q(s_rep) for q in agent.critics], dim=0).min(0).values
         probs = a_dist.probs
+        log_probs = torch.log_softmax(a_dist.logits, dim=1)
         if use_baseline:
             val_baseline = (probs * vals).sum(1, keepdim=True)
             # vals = A(s, a) = Q(s, a) - V(s)
             vals -= val_baseline
-        actor_loss = (probs * (log_alpha.exp() * torch.log(probs) - vals)).sum(1).mean()
+        actor_loss = (probs * (log_alpha.exp() * log_probs - vals)).sum(1).mean()
     else:
         a = a_dist.rsample()
         if not use_baseline:
