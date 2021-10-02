@@ -6,18 +6,22 @@ from torch import nn
 import torch.nn.functional as F
 
 import uafbc
+from uafbc.wrappers import ParallelActors, DiscreteActionWrapper, SimpleGymWrapper
 import gym
 from minatar_utils import MinAtarEnv, MinAtarEncoder
 
 
 def train_minatar_online(args):
-    train_env = MinAtarEnv(args.game)
-    test_env = MinAtarEnv(args.game)
+    def make_env():
+        return DiscreteActionWrapper(MinAtarEnv(args.game))
+
+    train_env = SimpleGymWrapper(ParallelActors(make_env, args.actors))
+    test_env = SimpleGymWrapper(make_env())
 
     # create agent
     agent = uafbc.Agent(
         act_space_size=6,
-        encoder=MinAtarEncoder(channels=train_env.num_channels),
+        encoder=MinAtarEncoder(channels=make_env().num_channels),
         actor_network_cls=uafbc.nets.mlps.DiscreteActor,
         critic_network_cls=uafbc.nets.mlps.DiscreteCritic,
         hidden_size=256,
@@ -47,6 +51,7 @@ def train_minatar_online(args):
         weighted_bellman_temp=None,
         weight_type=None,
         critic_updates_per_step=1,
+        target_entropy_mul=0.5,
     )
 
 
@@ -54,5 +59,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--game", type=str, default="breakout")
     parser.add_argument("--name", type=str, default="uafbc_minatar_online")
+    parser.add_argument("--actors", type=int, default=1)
     args = parser.parse_args()
     train_minatar_online(args)
