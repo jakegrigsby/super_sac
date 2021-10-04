@@ -44,6 +44,10 @@ def uafbc(
     encoder_l2=0.0,
     pop=True,
     # rl kwargs
+    use_exploration_process=False,
+    exploration_param_init=1.0,
+    exploration_param_final=0.1,
+    exploration_param_anneal=1_000_000,
     init_alpha=0.1,
     target_entropy_mul=1.0,
     gamma=0.99,
@@ -102,6 +106,8 @@ def uafbc(
     qprint(f"\tDiscrete Actions: {agent.discrete}")
     qprint(f"\tUse PG Update Online: {use_pg_update_online}")
     qprint(f"\tUse BC Update Online: {use_bc_update_online}")
+    qprint(f"\tUse Random Exploration Noise: {use_exploration_process}")
+    qprint(f"\tInit Alpha: {init_alpha}, Alpha LR: {alpha_lr}")
     qprint(
         f"\tUsing Beta Dist: {not agent.discrete and agent.actor.dist_impl == 'beta'}"
     )
@@ -162,6 +168,7 @@ def uafbc(
     )
 
     # max entropy
+    init_alpha = max(init_alpha, 1e-11)
     log_alpha = torch.Tensor([math.log(init_alpha)]).to(device)
     log_alpha.requires_grad = True
     log_alpha_optimizer = torch.optim.Adam([log_alpha], lr=alpha_lr, betas=(0.5, 0.999))
@@ -171,6 +178,21 @@ def uafbc(
         target_entropy = -train_env.action_space.shape[0]
     target_entropy *= target_entropy_mul
 
+    if use_exploration_process:
+        if agent.discrete:
+            random_process = lu.EpsilonGreedyExplorationNoise(
+                action_space=train_env.action_space,
+                eps_start=exploration_param_init,
+                eps_final=exploration_param_final,
+                steps_annealed=exploration_param_anneal,
+            )
+        else:
+            random_process = lu.GaussianExplorationNoise(
+                action_space=train_env.action_space,
+                start_scale=exploration_param_init,
+                final_scale=exploration_param_final,
+                steps_annealed=exploration_param_anneal,
+            )
     ###################
     ## TRAINING LOOP ##
     ###################
@@ -226,6 +248,10 @@ def uafbc(
                 action = agent.sample_action(state, from_cpu=True, actors=actors)
                 if agent.discrete:
                     print(action)
+                if use_exploration_process:
+                    action = random_process.sample(action)
+                if agent.discrete:
+                    print(f"exp act: {action}")
                 next_state, reward, done, info = train_env.step(action)
                 if infinite_bootstrap and steps_this_ep + 1 == max_episode_steps:
                     # allow infinite bootstrapping

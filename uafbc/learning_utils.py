@@ -13,6 +13,49 @@ from . import device, replay
 ###########
 
 
+class GaussianExplorationNoise:
+    def __init__(
+        self, action_space, start_scale=1.0, final_scale=0.1, steps_annealed=1000
+    ):
+        assert start_scale >= final_scale
+        self.action_space = action_space
+        self.start_scale = start_scale
+        self.final_scale = final_scale
+        self.steps_annealed = steps_annealed
+        self._current_scale = start_scale
+        self._scale_slope = (start_scale - final_scale) / steps_annealed
+
+    def sample(self, action):
+        noise = self._current_scale * np.random.randn(*action.shape)
+        self._current_scale = max(
+            self._current_scale - self._scale_slope, self.final_scale
+        )
+        return np.clip(action + noise, self.action_space.low, self.action_space.high)
+
+
+class EpsilonGreedyExplorationNoise:
+    def __init__(self, action_space, eps_start=1.0, eps_final=0.1, steps_annealed=1000):
+        assert eps_start >= eps_final
+        self.action_space = action_space
+        self.eps_start = eps_start
+        self.eps_final = eps_final
+        self.steps_annealed = steps_annealed
+        self._current_eps = eps_start
+        self._eps_slope = (eps_start - eps_final) / steps_annealed
+
+    def sample(self, action):
+        if random.random() < self._current_eps:
+            rand_action = np.zeros_like(action)
+            for i in range(len(action)):
+                rand_action[i] = self.action_space.sample()
+            action = rand_action
+        self._current_eps = max(
+            self._current_eps - self._eps_slope,
+            self.eps_final,
+        )
+        return action
+
+
 def get_grad_norm(model):
     total_norm = 0.0
     for p in model.parameters():

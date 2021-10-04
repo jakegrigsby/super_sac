@@ -216,14 +216,12 @@ def online_actor_update(
         s_rep = agent.encoder(o)
     a_dist = agent.actor(s_rep)
     if discrete:
-        vals = torch.stack([q(s_rep) for q in agent.critics], dim=0).min(0).values
         probs = a_dist.probs
         log_probs = torch.log_softmax(a_dist.logits, dim=1)
-        if use_baseline:
-            val_baseline = (probs * vals).sum(1, keepdim=True)
-            # vals = A(s, a) = Q(s, a) - V(s)
-            vals -= val_baseline
-        actor_loss = (probs * (log_alpha.exp() * log_probs - vals)).sum(1).mean()
+        with torch.no_grad():
+            vals = torch.stack([q(s_rep) for q in agent.critics], dim=0).min(0).values
+        vals = (probs * vals).sum(1, keepdim=True)
+        entropy_bonus = log_alpha.exp() * (probs * log_probs).sum(1, keepdim=True)
     else:
         a = a_dist.rsample()
         if not use_baseline:
@@ -235,7 +233,7 @@ def online_actor_update(
         entropy_bonus = log_alpha.exp() * a_dist.log_prob(a).sum(
             -1, keepdim=True
         ).clamp(-1000.0, 1000.0)
-        actor_loss = -(vals - entropy_bonus).mean()
+    actor_loss = -(vals - entropy_bonus).mean()
 
     optimizer.zero_grad()
     actor_loss.backward()
