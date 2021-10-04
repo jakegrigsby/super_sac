@@ -71,15 +71,16 @@ def train_cont_gym_online(args):
         random_warmup_steps=10_000,
         max_episode_steps=1000,
         pop=False,
-        init_alpha=0.1,
-        alpha_lr=1e-4,
+        init_alpha=0,
+        alpha_lr=0,
+        use_exploration_process=True,
     )
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--env", type=str, default="Pendulum-v0")
-    parser.add_argument("--name", type=str, default="uafbc_pendulum_run")
+    parser.add_argument("--name", type=str, default="uafbc_random_noise_run")
     parser.add_argument("--actors", type=int, default=1)
     args = parser.parse_args()
     train_cont_gym_online(args)

@@ -179,13 +179,12 @@ def alpha_update(
     with torch.no_grad():
         a_dist = agent.actor(agent.encoder(o))
     if discrete:
-        entropy = -(a_dist.probs * torch.log_softmax(a_dist.logits, dim=1)).sum(1)
-        alpha_loss = -(log_alpha * (target_entropy - entropy)).mean()
+        logp_a = (a_dist.probs * torch.log_softmax(a_dist.logits, dim=1)).sum(-1)
     else:
         logp_a = (
             a_dist.log_prob(a_dist.sample()).sum(-1, keepdim=True).clamp(-100.0, 100.0)
         )
-        alpha_loss = (-log_alpha.exp() * (logp_a + target_entropy)).mean()
+    alpha_loss = -(log_alpha * (logp_a + target_entropy).detach()).mean()
     optimizer.zero_grad()
     alpha_loss.backward()
     optimizer.step()

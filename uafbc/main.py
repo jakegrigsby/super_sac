@@ -224,6 +224,8 @@ def uafbc(
                     steps_this_ep = 0
                     done = False
                 action = agent.sample_action(state, from_cpu=True, actors=actors)
+                if agent.discrete:
+                    print(action)
                 next_state, reward, done, info = train_env.step(action)
                 if infinite_bootstrap and steps_this_ep + 1 == max_episode_steps:
                     # allow infinite bootstrapping
