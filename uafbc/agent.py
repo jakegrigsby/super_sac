@@ -164,7 +164,7 @@ class Agent:
         else:
             return self.continuous_forward(state, from_cpu)
 
-    def sample_action(self, obs, from_cpu=True, actors=1):
+    def sample_action(self, obs, from_cpu=True, actors=1, return_dist=False):
         if from_cpu:
             obs = self._process_obs(obs, actors)
         self.eval()
@@ -177,6 +177,8 @@ class Agent:
         self.train()
         if from_cpu:
             act = self._process_act(act, actors)
+        if return_dist:
+            return act, act_dist
         return act
 
     def _process_obs(self, obs, actors=1):

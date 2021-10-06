@@ -250,7 +250,10 @@ def compute_td_targets(
             agent.popart.update_stats(td_target)
             # normalize TD target
             td_target = agent.popart.normalize_values(td_target)
-    logs["td_target"] = td_target.mean().item()
+    logs["td_targets/mean_td_target"] = td_target.mean().item()
+    logs["td_targets/max_td_target"] = td_target.max().item()
+    logs["td_targets/min_td_target"] = td_target.min().item()
+    logs["td_targets/std_td_target"] = td_target.std().item()
     return td_target
 
 
@@ -296,7 +299,10 @@ def compute_backup_weights(
                     [q(s1_rep, a1) for q in target_agent.critics], dim=0
                 ).std(0)
             weights = batch_size * F.softmax(-q_std * weight_temp, dim=0)
-    logs["bellman_weight"] = weights.mean().item()
+    logs["bellman_weights/mean"] = weights.mean().item()
+    logs["bellman_weights/max"] = weights.max().item()
+    logs["bellman_weights/min"] = weights.min().item()
+    logs["bellman_weights/std"] = weights.std().item()
     return weights
 
 

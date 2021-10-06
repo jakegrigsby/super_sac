@@ -105,9 +105,11 @@ def critic_update(
     critic_optimizer.step()
     encoder_optimizer.step()
 
-    logs["random_critic_grad_norm"] = lu.get_grad_norm(random.choice(agent.critics))
-    logs["encoder_grad_norm"] = lu.get_grad_norm(agent.encoder)
-    logs["critic_loss"] = critic_loss
+    logs["losses/critic_loss"] = critic_loss
+    logs["gradients/random_critic_grad_norm"] = lu.get_grad_norm(
+        random.choice(agent.critics)
+    )
+    logs["gradients/encoder_grad_norm"] = lu.get_grad_norm(agent.encoder)
     if update_priorities:
         lu.adjust_priorities(logs, replay_dict, agent, buffer)
     return logs
@@ -151,8 +153,8 @@ def offline_actor_update(
 
     if per:
         lu.adjust_priorities(logs, replay_dict, agent, buffer)
-    logs["offline_actor_loss"] = loss.item()
-    logs["actor_offline_grad_norm"] = lu.get_grad_norm(agent.actor)
+    logs["losses/offline_actor_loss"] = loss.item()
+    logs["gradients/actor_offline_grad_norm"] = lu.get_grad_norm(agent.actor)
     return logs
 
 
@@ -188,7 +190,7 @@ def alpha_update(
     optimizer.zero_grad()
     alpha_loss.backward()
     optimizer.step()
-    logs["alpha_loss"] = alpha_loss.item()
+    logs["losses/alpha_loss"] = alpha_loss.item()
     logs["alpha"] = log_alpha.exp().item()
     return logs
 
@@ -241,6 +243,6 @@ def online_actor_update(
         torch.nn.utils.clip_grad_norm_(agent.actor.parameters(), clip)
     optimizer.step()
 
-    logs["actor_online_loss"] = actor_loss.item()
-    logs["actor_online_grad_norm"] = lu.get_grad_norm(agent.actor)
+    logs["losses/actor_online_loss"] = actor_loss.item()
+    logs["gradients/actor_online_grad_norm"] = lu.get_grad_norm(agent.actor)
     return logs

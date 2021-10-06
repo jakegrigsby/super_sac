@@ -245,13 +245,14 @@ def uafbc(
                     state = train_env.reset()
                     steps_this_ep = 0
                     done = False
-                action = agent.sample_action(state, from_cpu=True, actors=actors)
-                if agent.discrete:
-                    print(action)
+                action, act_dist = agent.sample_action(
+                    state, from_cpu=True, actors=actors, return_dist=True
+                )
+                if agent.discrete and step % 111 == 0:
+                    np.set_printoptions(precision=2, suppress=True)
+                    print(act_dist.probs.mean(0).cpu().numpy())
                 if use_exploration_process:
                     action = random_process.sample(action)
-                if agent.discrete:
-                    print(f"exp act: {action}")
                 next_state, reward, done, info = train_env.step(action)
                 if infinite_bootstrap and steps_this_ep + 1 == max_episode_steps:
                     # allow infinite bootstrapping
