@@ -51,7 +51,7 @@ def train_minatar_online(args):
         weighted_bellman_temp=None,
         weight_type=None,
         critic_updates_per_step=1,
-        target_entropy_mul=0.5,
+        target_entropy_mul=1.0,
     )
 
 
