@@ -10,7 +10,7 @@ import pybullet
 import pybullet_envs
 
 import uafbc
-from uafbc.wrappers import SimpleGymWrapper, NormActionSpace, ParallelActors
+from uafbc.wrappers import SimpleGymWrapper, NormActionSpace, ParallelActors, ScaleReward
 
 
 class IdentityEncoder(uafbc.nets.Encoder):
@@ -29,7 +29,7 @@ class IdentityEncoder(uafbc.nets.Encoder):
 
 def train_cont_gym_online(args):
     def make_env():
-        return NormActionSpace(gym.make(args.env))
+        return ScaleReward(NormActionSpace(gym.make(args.env)), args.r_scale)
 
     train_env = SimpleGymWrapper(ParallelActors(make_env, args.parallel_envs))
     test_env = SimpleGymWrapper(make_env())
@@ -45,7 +45,7 @@ def train_cont_gym_online(args):
         hidden_size=256,
         ucb_bonus=args.ucb_bonus,
         discrete=False,
-        auto_rescale_targets=False,
+        auto_rescale_targets=args.popart,
         beta_dist=False,
     )
 
@@ -73,7 +73,7 @@ def train_cont_gym_online(args):
         num_steps_online=1_000_000,
         random_warmup_steps=10_000,
         max_episode_steps=1000,
-        pop=False,
+        pop=args.popart,
         init_alpha=0.1,
         alpha_lr=1e-4,
     )
@@ -84,8 +84,10 @@ if __name__ == "__main__":
     parser.add_argument("--env", type=str, default="Pendulum-v0")
     parser.add_argument("--name", type=str, default="uafbc_pendulum_run")
     parser.add_argument("--ucb_bonus", type=float, default=0.0)
+    parser.add_argument("--r_scale", type=float, default=1.0)
     parser.add_argument("--actors", type=int, default=1)
     parser.add_argument("--critics", type=int, default=2)
     parser.add_argument("--parallel_envs", type=int, default=1)
+    parser.add_argument("--popart", action="store_true")
     args = parser.parse_args()
     train_cont_gym_online(args)

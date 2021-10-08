@@ -256,17 +256,14 @@ def uafbc(
                 action, act_dist = agent.sample_action(
                     state, from_cpu=True, num_envs=num_envs, return_dist=True
                 )
-                if agent.discrete and step % 111 == 0:
-                    np.set_printoptions(precision=2, suppress=True)
-                    print(act_dist.probs.mean(0).cpu().numpy())
                 if use_exploration_process:
                     action = random_process.sample(action)
                 next_state, reward, done, info = train_env.step(action)
                 if infinite_bootstrap and steps_this_ep + 1 == max_episode_steps:
                     # allow infinite bootstrapping
                     done = (
-                        np.expand_dims(np.array([False for _ in range(actors)]), 1)
-                        if actors > 1
+                        np.expand_dims(np.array([False for _ in range(num_envs)]), 1)
+                        if num_envs > 1
                         else False
                     )
                 buffer.push(state, action, reward, next_state, done)
@@ -335,6 +332,7 @@ def uafbc(
                     learning.online_actor_update(
                         buffer=buffer,
                         agent=agent,
+                        pop=pop,
                         optimizer=online_actor_optimizer,
                         log_alpha=log_alpha,
                         batch_size=batch_size,

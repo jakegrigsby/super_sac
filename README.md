@@ -17,6 +17,7 @@ This repository contains the code for a PyTorch RL agent that is designed to be 
 - Ensemble of actor networks, loosely based on [SUNRISE](https://arxiv.org/abs/2007.04938).
 - Weighted critic updates based on ensemble uncertainty to prevent error propagation, loosely based on [SUNRISE](https://arxiv.org/abs/2007.04938).
 - Parallel environment collection (with a lot of help from [stable_baselines3](https://github.com/DLR-RM/stable-baselines3)).
+- [PopArt](https://arxiv.org/abs/1809.04474) critic output normalization.
 - Tensorboard logging.
 
 ### Examples:

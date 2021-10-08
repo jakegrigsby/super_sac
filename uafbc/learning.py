@@ -202,6 +202,7 @@ def alpha_update(
 def online_actor_update(
     buffer,
     agent,
+    pop,
     optimizer,
     log_alpha,
     batch_size,
@@ -231,6 +232,8 @@ def online_actor_update(
                 vals = (
                     torch.stack([q(s_rep) for q in agent.critics], dim=0).min(0).values
                 )
+                if agent.popart and pop:
+                    vals = agent.popart(vals)
             vals = (probs * vals).sum(1, keepdim=True)
             entropy_bonus = log_alpha.exp() * (probs * log_probs).sum(1, keepdim=True)
         else:
@@ -241,6 +244,8 @@ def online_actor_update(
                     .min(0)
                     .values
                 )
+                if agent.popart and pop:
+                    vals = agent.popart(vals)
             else:
                 vals = agent.adv_estimator(o, a)
             entropy_bonus = log_alpha.exp() * a_dist.log_prob(a).sum(
