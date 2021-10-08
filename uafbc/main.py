@@ -80,6 +80,19 @@ def uafbc(
     save_interval=5000,
     verbosity=0,
 ):
+    def _get_parallel_envs(env):
+        _env = env
+        while hasattr(_env, "env"):
+            if hasattr(_env, "_PARALLEL_ACTORS"):
+                return _env._PARALLEL_ACTORS
+            else:
+                _env = _env.env
+        return 1
+
+    num_envs = _get_parallel_envs(train_env)
+    assert (
+        _get_parallel_envs(test_env) == 1
+    ), "Evaluation Envs are not compatible with parallel sampling."
 
     if save_to_disk or log_to_disk:
         save_dir = make_process_dirs(name)
@@ -91,26 +104,33 @@ def uafbc(
         augmenter = augmentations.AugmentationSequence(
             [augmentations.IdentityAug(batch_size)]
         )
+
     qprint = lambda x: print(x) if verbosity else None
     qprint(" ----- AFBC -----")
     qprint(f"\tART: {agent.popart is not False}")
     qprint(f"\tPOP: {pop}")
-    qprint(f"\tBellman Backup Weight type: {weight_type}")
+    qprint(
+        f"\tBellman Backup Weight Type: {weight_type}; Temperature: {weighted_bellman_temp}"
+    )
     qprint(f"\tBC Warmup Steps: {bc_warmup_steps}")
     qprint(f"\tCritic Ensemble Size: {len(agent.critics)}")
+    qprint(f"\tTD Target Critic Ensemble Size: {target_critic_ensemble_n}")
     qprint(f"\tCritic Updates per Step: {critic_updates_per_step}")
-    qprint(f"\tActor Online Updates per Step: {online_actor_updates_per_step}")
-    qprint(f"\tActor Offline Updates per Step: {offline_actor_updates_per_step}")
+    qprint(f"\tDiscrete Actions: {agent.discrete}")
+    qprint(f"\tActor Ensemble Size: {len(agent.actors)}")
+    qprint(f"\tActor Updates per Online Step: {online_actor_updates_per_step}")
+    qprint(f"\tActor Updates per Offline Step: {offline_actor_updates_per_step}")
+    qprint(f"\tQ-Value Uncertainty Exploration Bonus: {agent.ucb_bonus}")
     qprint(f"\tEncoder Lambda: {encoder_lambda}")
     qprint(f"\tActor Lambda: {actor_lambda}")
-    qprint(f"\tDiscrete Actions: {agent.discrete}")
     qprint(f"\tUse PG Update Online: {use_pg_update_online}")
     qprint(f"\tUse BC Update Online: {use_bc_update_online}")
     qprint(f"\tUse Random Exploration Noise: {use_exploration_process}")
     qprint(f"\tInit Alpha: {init_alpha}, Alpha LR: {alpha_lr}")
     qprint(
-        f"\tUsing Beta Dist: {not agent.discrete and agent.actor.dist_impl == 'beta'}"
+        f"\tUsing Beta Dist: {not agent.discrete and agent.actors[0].dist_impl == 'beta'}"
     )
+    qprint(f"\tParallel Training Envs: {num_envs}")
     qprint(" -----      -----")
 
     ###########
@@ -118,22 +138,6 @@ def uafbc(
     ###########
     agent.to(device)
     agent.train()
-
-    def _get_actors(env):
-        _env = env
-        while hasattr(_env, "env"):
-            if hasattr(_env, "_PARALLEL_ACTORS"):
-                return _env._PARALLEL_ACTORS
-            else:
-                _env = _env.env
-        return 1
-
-    actors = _get_actors(train_env)
-    qprint(f"Detected {actors} training actors.")
-    assert (
-        _get_actors(test_env) == 1
-    ), "Evaluation Envs are not compatible with parallel sampling."
-
     # create target networks
     target_agent = copy.deepcopy(agent)
     target_agent.to(device)
@@ -149,13 +153,13 @@ def uafbc(
         betas=(0.9, 0.999),
     )
     offline_actor_optimizer = torch.optim.Adam(
-        agent.actor.parameters(),
+        chain(*(actor.parameters() for actor in agent.actors)),
         lr=actor_lr,
         weight_decay=actor_l2,
         betas=(0.9, 0.999),
     )
     online_actor_optimizer = torch.optim.Adam(
-        agent.actor.parameters(),
+        chain(*(actor.parameters() for actor in agent.actors)),
         lr=actor_lr,
         weight_decay=actor_l2,
         betas=(0.9, 0.999),
@@ -201,7 +205,11 @@ def uafbc(
 
     if random_warmup_steps:
         lu.warmup_buffer(
-            buffer, train_env, random_warmup_steps, max_episode_steps, actors=actors
+            buffer,
+            train_env,
+            random_warmup_steps,
+            max_episode_steps,
+            num_envs=num_envs,
         )
 
     # behavioral cloning
@@ -246,7 +254,7 @@ def uafbc(
                     steps_this_ep = 0
                     done = False
                 action, act_dist = agent.sample_action(
-                    state, from_cpu=True, actors=actors, return_dist=True
+                    state, from_cpu=True, num_envs=num_envs, return_dist=True
                 )
                 if agent.discrete and step % 111 == 0:
                     np.set_printoptions(precision=2, suppress=True)
@@ -262,7 +270,7 @@ def uafbc(
                         else False
                     )
                 buffer.push(state, action, reward, next_state, done)
-                if actors > 1:
+                if num_envs > 1:
                     done = done.any()
                 state = next_state
                 steps_this_ep += 1

@@ -148,13 +148,17 @@ def offline_actor_update(
     optimizer.zero_grad()
     loss.backward()
     if clip:
-        torch.nn.utils.clip_grad_norm_(agent.actor.parameters(), clip)
+        torch.nn.utils.clip_grad_norm_(
+            chain(*(actor.parameters() for actor in agent.actors)), clip
+        )
     optimizer.step()
 
     if per:
         lu.adjust_priorities(logs, replay_dict, agent, buffer)
     logs["losses/offline_actor_loss"] = loss.item()
-    logs["gradients/actor_offline_grad_norm"] = lu.get_grad_norm(agent.actor)
+    logs["gradients/actor_offline_grad_norm"] = lu.get_grad_norm(
+        random.choice(agent.actors)
+    )
     return logs
 
 
@@ -179,7 +183,7 @@ def alpha_update(
     )
     o, *_ = replay_dict["primary_batch"]
     with torch.no_grad():
-        a_dist = agent.actor(agent.encoder(o))
+        a_dist = random.choice(agent.actors)(agent.encoder(o))
     if discrete:
         logp_a = (a_dist.probs * torch.log_softmax(a_dist.logits, dim=1)).sum(-1)
     else:
@@ -216,33 +220,45 @@ def online_actor_update(
     o, *_ = replay_dict["primary_batch"]
     with torch.no_grad():
         s_rep = agent.encoder(o)
-    a_dist = agent.actor(s_rep)
-    if discrete:
-        probs = a_dist.probs
-        log_probs = torch.log_softmax(a_dist.logits, dim=1)
-        with torch.no_grad():
-            vals = torch.stack([q(s_rep) for q in agent.critics], dim=0).min(0).values
-        vals = (probs * vals).sum(1, keepdim=True)
-        entropy_bonus = log_alpha.exp() * (probs * log_probs).sum(1, keepdim=True)
-    else:
-        a = a_dist.rsample()
-        if not use_baseline:
-            vals = (
-                torch.stack([q(s_rep, a) for q in agent.critics], dim=0).min(0).values
-            )
+
+    actor_loss = 0.0
+    for actor in agent.actors:
+        a_dist = actor(s_rep)
+        if discrete:
+            probs = a_dist.probs
+            log_probs = torch.log_softmax(a_dist.logits, dim=1)
+            with torch.no_grad():
+                vals = (
+                    torch.stack([q(s_rep) for q in agent.critics], dim=0).min(0).values
+                )
+            vals = (probs * vals).sum(1, keepdim=True)
+            entropy_bonus = log_alpha.exp() * (probs * log_probs).sum(1, keepdim=True)
         else:
-            vals = agent.adv_estimator(o, a)
-        entropy_bonus = log_alpha.exp() * a_dist.log_prob(a).sum(
-            -1, keepdim=True
-        ).clamp(-1000.0, 1000.0)
-    actor_loss = -(vals - entropy_bonus).mean()
+            a = a_dist.rsample()
+            if not use_baseline:
+                vals = (
+                    torch.stack([q(s_rep, a) for q in agent.critics], dim=0)
+                    .min(0)
+                    .values
+                )
+            else:
+                vals = agent.adv_estimator(o, a)
+            entropy_bonus = log_alpha.exp() * a_dist.log_prob(a).sum(
+                -1, keepdim=True
+            ).clamp(-1000.0, 1000.0)
+        actor_loss += -(vals - entropy_bonus).mean()
+    actor_loss /= len(agent.actors)
 
     optimizer.zero_grad()
     actor_loss.backward()
     if clip:
-        torch.nn.utils.clip_grad_norm_(agent.actor.parameters(), clip)
+        torch.nn.utils.clip_grad_norm_(
+            chain(*(actor.parameters() for actor in agent.actors)), clip
+        )
     optimizer.step()
 
     logs["losses/actor_online_loss"] = actor_loss.item()
-    logs["gradients/actor_online_grad_norm"] = lu.get_grad_norm(agent.actor)
+    logs["gradients/actor_online_grad_norm"] = lu.get_grad_norm(
+        random.choice(agent.actors)
+    )
     return logs

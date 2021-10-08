@@ -1,3 +1,5 @@
+import random
+
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -7,7 +9,7 @@ class AdvantageEstimator(nn.Module):
     def __init__(
         self,
         encoder,
-        actor,
+        actors,
         critics,
         popart=False,
         discrete_method="indirect",
@@ -18,7 +20,7 @@ class AdvantageEstimator(nn.Module):
         assert continuous_method in ["mean", "max"]
         assert discrete_method in ["indirect", "direct"]
         self.encoder = encoder
-        self.actor = actor
+        self.actors = actors
         self.critics = critics
         self.popart = popart
         self.cont_method = continuous_method
@@ -38,7 +40,9 @@ class AdvantageEstimator(nn.Module):
     def discrete_indirect_forward(self, obs, action):
         state_rep = self.encoder(obs)
         # V(s) = E_{a ~ \pi(s)} [Q(s, a)]
-        probs = self.actor(state_rep).probs
+        probs = torch.stack(
+            [actor(state_rep).probs for actor in self.actors], dim=0
+        ).mean(0)
         min_q = (
             torch.stack([self.pop(q, state_rep) for q in self.critics], dim=0)
             .min(0)
@@ -64,8 +68,7 @@ class AdvantageEstimator(nn.Module):
         with torch.no_grad():
             # get an action distribution from the policy
             state_rep = self.encoder(obs)
-            act_dist = self.actor(state_rep)
-            actions = [act_dist.sample() for _ in range(n)]
+            actions = [random.choice(self.actors)(state_rep).sample() for _ in range(n)]
             # get the q value for each of the n actions
             qs = []
             for act in actions:

@@ -70,7 +70,7 @@ def get_grad_norm(model):
     return total_norm
 
 
-def warmup_buffer(buffer, env, warmup_steps, max_episode_steps, actors=1):
+def warmup_buffer(buffer, env, warmup_steps, max_episode_steps, num_envs=1):
     # use warmp up steps to add random transitions to the buffer
     state = env.reset()
     done = False
@@ -85,11 +85,11 @@ def warmup_buffer(buffer, env, warmup_steps, max_episode_steps, actors=1):
             rand_action = np.array(float(rand_action))
             if len(rand_action.shape) == 0:
                 rand_action = np.expand_dims(rand_action, 0)
-        if actors > 1:
-            rand_action = np.array([rand_action for _ in range(actors)])
+        if num_envs > 1:
+            rand_action = np.array([rand_action for _ in range(num_envs)])
         next_state, reward, done, info = env.step(rand_action)
         buffer.push(state, rand_action, reward, next_state, done)
-        if actors > 1:
+        if num_envs > 1:
             done = done.any()
         state = next_state
         steps_this_ep += 1
@@ -169,14 +169,18 @@ def filtered_bc_loss(logs, replay_dict, agent, filter_=True, discrete=False):
             mask = (adv >= 0.0).float()
             adv_weights = mask
     s_rep = agent.encoder(o)
-    dist = agent.actor(s_rep)
-    if discrete:
-        logp_a = dist.log_prob(a.squeeze(1)).unsqueeze(1)
-    else:
-        logp_a = dist.log_prob(a).sum(-1, keepdim=True)
-    if filter_:
-        logp_a *= adv_weights
-    loss = -(logp_a.clamp(-100.0, 100.0)).mean()
+
+    loss = 0.0
+    for actor in agent.actors:
+        dist = actor(s_rep)
+        if discrete:
+            logp_a = dist.log_prob(a.squeeze(1)).unsqueeze(1)
+        else:
+            logp_a = dist.log_prob(a).sum(-1, keepdim=True)
+        if filter_:
+            logp_a *= adv_weights
+        loss += -(logp_a.clamp(-100.0, 100.0)).mean()
+    loss /= len(agent.actors)
     logs["filterd_bc_loss"] = loss.item()
     return loss
 
@@ -184,14 +188,15 @@ def filtered_bc_loss(logs, replay_dict, agent, filter_=True, discrete=False):
 def action_invariance_constraint(logs, replay_dict, agent, a=None):
     oo, _ = replay_dict["original_obs"]
     ao, _ = replay_dict["augmented_obs"]
+    actor = random.choice(agent.actors)
     with torch.no_grad():
         os_rep = agent.encoder(oo)
-        o_dist = agent.actor(os_rep)
+        o_dist = actor(os_rep)
         if a is None:
             a = o_dist.sample()
         o_logp_a = o_dist.log_prob(a).sum(-1, keepdim=True)
     as_rep = agent.encoder(ao)
-    a_dist = agent.actor(as_rep)
+    a_dist = actor(as_rep)
     a_logp_a = a_dist.log_prob(a).sum(-1, keepdim=True)
     return F.mse_loss(o_logp_a, a_logp_a)
 
@@ -219,7 +224,7 @@ def compute_td_targets(
     o, a, r, o1, d = replay_dict["primary_batch"]
     with torch.no_grad():
         s1_rep = target_agent.encoder(o1)
-        a_dist_s1 = agent.actor(s1_rep)
+        a_dist_s1 = random.choice(agent.actors)(s1_rep)
         # REDQ
         ensemble = random.sample(target_agent.critics, ensemble_n)
         if discrete:
@@ -285,7 +290,7 @@ def compute_backup_weights(
             weights = torch.sigmoid(-q_std * weight_temp) + 0.5
         elif weight_type == "softmax":
             s1_rep = target_agent.encoder(o1)
-            a1 = agent.actor(s1_rep).sample()
+            a1 = random.choice(agent.actors)(s1_rep).sample()
             if discrete:
                 q_std = torch.stack(
                     [
