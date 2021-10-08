@@ -31,7 +31,7 @@ def train_cont_gym_online(args):
     def make_env():
         return NormActionSpace(gym.make(args.env))
 
-    train_env = SimpleGymWrapper(ParallelActors(make_env, args.actors))
+    train_env = SimpleGymWrapper(ParallelActors(make_env, args.parallel_envs))
     test_env = SimpleGymWrapper(make_env())
 
     # create agent
@@ -40,8 +40,10 @@ def train_cont_gym_online(args):
         encoder=IdentityEncoder(train_env.observation_space.shape[0]),
         actor_network_cls=uafbc.nets.mlps.ContinuousStochasticActor,
         critic_network_cls=uafbc.nets.mlps.ContinuousCritic,
-        critic_ensemble_size=2,
+        critic_ensemble_size=args.critics,
+        actor_ensemble_size=args.actors,
         hidden_size=256,
+        ucb_bonus=args.ucb_bonus,
         discrete=False,
         auto_rescale_targets=False,
         beta_dist=False,
@@ -62,8 +64,9 @@ def train_cont_gym_online(args):
         critic_lr=1e-4,
         encoder_lr=1e-4,
         batch_size=512,
-        weighted_bellman_temp=None,
-        weight_type=None,
+        target_critic_ensemble_n=min(args.critics, 2),
+        weighted_bellman_temp=10.0,
+        weight_type="softmax",
         use_bc_update_online=False,
         bc_warmup_steps=0,
         num_steps_offline=0,
@@ -80,6 +83,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--env", type=str, default="Pendulum-v0")
     parser.add_argument("--name", type=str, default="uafbc_pendulum_run")
+    parser.add_argument("--ucb_bonus", type=float, default=0.0)
     parser.add_argument("--actors", type=int, default=1)
+    parser.add_argument("--critics", type=int, default=2)
+    parser.add_argument("--parallel_envs", type=int, default=1)
     args = parser.parse_args()
     train_cont_gym_online(args)
