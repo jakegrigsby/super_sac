@@ -61,12 +61,11 @@ def train_atari(args):
         use_bc_update_online=False,
         num_steps_offline=0,
         num_steps_online=args.steps,
-        random_warmup_steps=10_000,
+        random_warmup_steps=50_000,
         max_episode_steps=108_000,
         actor_clip=10.0,
         critic_clip=10.0,
         encoder_clip=10.0,
-        init_alpha=0.1,
         batch_size=64,
         pop=args.popart,
         weighted_bellman_temp=None,
@@ -74,7 +73,9 @@ def train_atari(args):
         critic_updates_per_step=1,
         eval_episodes=10,
         augmenter=None,
+        init_alpha=0.1,
         target_entropy_mul=1.0,
+        alpha_lr=1e-4,
     )
 
 

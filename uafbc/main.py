@@ -44,6 +44,10 @@ def uafbc(
     encoder_l2=0.0,
     pop=True,
     # rl kwargs
+    use_exploration_process=False,
+    exploration_param_init=1.0,
+    exploration_param_final=0.1,
+    exploration_param_anneal=1_000_000,
     init_alpha=0.1,
     target_entropy_mul=1.0,
     gamma=0.99,
@@ -76,6 +80,19 @@ def uafbc(
     save_interval=5000,
     verbosity=0,
 ):
+    def _get_parallel_envs(env):
+        _env = env
+        while hasattr(_env, "env"):
+            if hasattr(_env, "_PARALLEL_ACTORS"):
+                return _env._PARALLEL_ACTORS
+            else:
+                _env = _env.env
+        return 1
+
+    num_envs = _get_parallel_envs(train_env)
+    assert (
+        _get_parallel_envs(test_env) == 1
+    ), "Evaluation Envs are not compatible with parallel sampling."
 
     if save_to_disk or log_to_disk:
         save_dir = make_process_dirs(name)
@@ -87,24 +104,33 @@ def uafbc(
         augmenter = augmentations.AugmentationSequence(
             [augmentations.IdentityAug(batch_size)]
         )
+
     qprint = lambda x: print(x) if verbosity else None
     qprint(" ----- AFBC -----")
     qprint(f"\tART: {agent.popart is not False}")
     qprint(f"\tPOP: {pop}")
-    qprint(f"\tBellman Backup Weight type: {weight_type}")
+    qprint(
+        f"\tBellman Backup Weight Type: {weight_type}; Temperature: {weighted_bellman_temp}"
+    )
     qprint(f"\tBC Warmup Steps: {bc_warmup_steps}")
     qprint(f"\tCritic Ensemble Size: {len(agent.critics)}")
+    qprint(f"\tTD Target Critic Ensemble Size: {target_critic_ensemble_n}")
     qprint(f"\tCritic Updates per Step: {critic_updates_per_step}")
-    qprint(f"\tActor Online Updates per Step: {online_actor_updates_per_step}")
-    qprint(f"\tActor Offline Updates per Step: {offline_actor_updates_per_step}")
+    qprint(f"\tDiscrete Actions: {agent.discrete}")
+    qprint(f"\tActor Ensemble Size: {len(agent.actors)}")
+    qprint(f"\tActor Updates per Online Step: {online_actor_updates_per_step}")
+    qprint(f"\tActor Updates per Offline Step: {offline_actor_updates_per_step}")
+    qprint(f"\tQ-Value Uncertainty Exploration Bonus: {agent.ucb_bonus}")
     qprint(f"\tEncoder Lambda: {encoder_lambda}")
     qprint(f"\tActor Lambda: {actor_lambda}")
-    qprint(f"\tDiscrete Actions: {agent.discrete}")
     qprint(f"\tUse PG Update Online: {use_pg_update_online}")
     qprint(f"\tUse BC Update Online: {use_bc_update_online}")
+    qprint(f"\tUse Random Exploration Noise: {use_exploration_process}")
+    qprint(f"\tInit Alpha: {init_alpha}, Alpha LR: {alpha_lr}")
     qprint(
-        f"\tUsing Beta Dist: {not agent.discrete and agent.actor.dist_impl == 'beta'}"
+        f"\tUsing Beta Dist: {not agent.discrete and agent.actors[0].dist_impl == 'beta'}"
     )
+    qprint(f"\tParallel Training Envs: {num_envs}")
     qprint(" -----      -----")
 
     ###########
@@ -112,22 +138,6 @@ def uafbc(
     ###########
     agent.to(device)
     agent.train()
-
-    def _get_actors(env):
-        _env = env
-        while hasattr(_env, "env"):
-            if hasattr(_env, "_PARALLEL_ACTORS"):
-                return _env._PARALLEL_ACTORS
-            else:
-                _env = _env.env
-        return 1
-
-    actors = _get_actors(train_env)
-    qprint(f"Detected {actors} training actors.")
-    assert (
-        _get_actors(test_env) == 1
-    ), "Evaluation Envs are not compatible with parallel sampling."
-
     # create target networks
     target_agent = copy.deepcopy(agent)
     target_agent.to(device)
@@ -143,13 +153,13 @@ def uafbc(
         betas=(0.9, 0.999),
     )
     offline_actor_optimizer = torch.optim.Adam(
-        agent.actor.parameters(),
+        chain(*(actor.parameters() for actor in agent.actors)),
         lr=actor_lr,
         weight_decay=actor_l2,
         betas=(0.9, 0.999),
     )
     online_actor_optimizer = torch.optim.Adam(
-        agent.actor.parameters(),
+        chain(*(actor.parameters() for actor in agent.actors)),
         lr=actor_lr,
         weight_decay=actor_l2,
         betas=(0.9, 0.999),
@@ -162,6 +172,7 @@ def uafbc(
     )
 
     # max entropy
+    init_alpha = max(init_alpha, 1e-11)
     log_alpha = torch.Tensor([math.log(init_alpha)]).to(device)
     log_alpha.requires_grad = True
     log_alpha_optimizer = torch.optim.Adam([log_alpha], lr=alpha_lr, betas=(0.5, 0.999))
@@ -171,6 +182,21 @@ def uafbc(
         target_entropy = -train_env.action_space.shape[0]
     target_entropy *= target_entropy_mul
 
+    if use_exploration_process:
+        if agent.discrete:
+            random_process = lu.EpsilonGreedyExplorationNoise(
+                action_space=train_env.action_space,
+                eps_start=exploration_param_init,
+                eps_final=exploration_param_final,
+                steps_annealed=exploration_param_anneal,
+            )
+        else:
+            random_process = lu.GaussianExplorationNoise(
+                action_space=train_env.action_space,
+                start_scale=exploration_param_init,
+                final_scale=exploration_param_final,
+                steps_annealed=exploration_param_anneal,
+            )
     ###################
     ## TRAINING LOOP ##
     ###################
@@ -179,7 +205,11 @@ def uafbc(
 
     if random_warmup_steps:
         lu.warmup_buffer(
-            buffer, train_env, random_warmup_steps, max_episode_steps, actors=actors
+            buffer,
+            train_env,
+            random_warmup_steps,
+            max_episode_steps,
+            num_envs=num_envs,
         )
 
     # behavioral cloning
@@ -223,17 +253,21 @@ def uafbc(
                     state = train_env.reset()
                     steps_this_ep = 0
                     done = False
-                action = agent.sample_action(state, from_cpu=True, actors=actors)
+                action, act_dist = agent.sample_action(
+                    state, from_cpu=True, num_envs=num_envs, return_dist=True
+                )
+                if use_exploration_process:
+                    action = random_process.sample(action)
                 next_state, reward, done, info = train_env.step(action)
                 if infinite_bootstrap and steps_this_ep + 1 == max_episode_steps:
                     # allow infinite bootstrapping
                     done = (
-                        np.expand_dims(np.array([False for _ in range(actors)]), 1)
-                        if actors > 1
+                        np.expand_dims(np.array([False for _ in range(num_envs)]), 1)
+                        if num_envs > 1
                         else False
                     )
                 buffer.push(state, action, reward, next_state, done)
-                if actors > 1:
+                if num_envs > 1:
                     done = done.any()
                 state = next_state
                 steps_this_ep += 1
@@ -298,6 +332,7 @@ def uafbc(
                     learning.online_actor_update(
                         buffer=buffer,
                         agent=agent,
+                        pop=pop,
                         optimizer=online_actor_optimizer,
                         log_alpha=log_alpha,
                         batch_size=batch_size,

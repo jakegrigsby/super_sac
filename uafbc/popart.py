@@ -6,7 +6,7 @@ import torch.nn.functional as F
 
 
 class PopArtLayer(nn.Module):
-    def __init__(self, beta=0.01, min_steps=1000, init_nu=10 ** 6):
+    def __init__(self, beta=1e-4, min_steps=1000, init_nu=0):
         super().__init__()
         self.mu = torch.zeros(1)
         # high initialization said to increase stability (PopArt pg 13)
@@ -42,8 +42,10 @@ class PopArtLayer(nn.Module):
         self.nu = (1.0 - beta_t) * self.nu + (beta_t * (val ** 2).mean())
 
         # heuristic to protect stability early in training
-        # self._stable = (self._t > self.min_steps) and (((1.0 - old_sigma) / self.sigma) <= 0.1)
-        self._stable = self._t > self.min_steps
+        self._stable = (self._t > self.min_steps) and (
+            ((1.0 - old_sigma) / self.sigma) <= 0.1
+        )
+        # self._stable = self._t > self.min_steps
 
         if self._stable:
             self.w *= old_sigma / self.sigma

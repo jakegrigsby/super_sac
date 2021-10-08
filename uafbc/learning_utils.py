@@ -13,6 +13,49 @@ from . import device, replay
 ###########
 
 
+class GaussianExplorationNoise:
+    def __init__(
+        self, action_space, start_scale=1.0, final_scale=0.1, steps_annealed=1000
+    ):
+        assert start_scale >= final_scale
+        self.action_space = action_space
+        self.start_scale = start_scale
+        self.final_scale = final_scale
+        self.steps_annealed = steps_annealed
+        self._current_scale = start_scale
+        self._scale_slope = (start_scale - final_scale) / steps_annealed
+
+    def sample(self, action):
+        noise = self._current_scale * np.random.randn(*action.shape)
+        self._current_scale = max(
+            self._current_scale - self._scale_slope, self.final_scale
+        )
+        return np.clip(action + noise, self.action_space.low, self.action_space.high)
+
+
+class EpsilonGreedyExplorationNoise:
+    def __init__(self, action_space, eps_start=1.0, eps_final=0.1, steps_annealed=1000):
+        assert eps_start >= eps_final
+        self.action_space = action_space
+        self.eps_start = eps_start
+        self.eps_final = eps_final
+        self.steps_annealed = steps_annealed
+        self._current_eps = eps_start
+        self._eps_slope = (eps_start - eps_final) / steps_annealed
+
+    def sample(self, action):
+        if random.random() < self._current_eps:
+            rand_action = np.zeros_like(action)
+            for i in range(len(action)):
+                rand_action[i] = self.action_space.sample()
+            action = rand_action
+        self._current_eps = max(
+            self._current_eps - self._eps_slope,
+            self.eps_final,
+        )
+        return action
+
+
 def get_grad_norm(model):
     total_norm = 0.0
     for p in model.parameters():
@@ -27,7 +70,7 @@ def get_grad_norm(model):
     return total_norm
 
 
-def warmup_buffer(buffer, env, warmup_steps, max_episode_steps, actors=1):
+def warmup_buffer(buffer, env, warmup_steps, max_episode_steps, num_envs=1):
     # use warmp up steps to add random transitions to the buffer
     state = env.reset()
     done = False
@@ -42,11 +85,11 @@ def warmup_buffer(buffer, env, warmup_steps, max_episode_steps, actors=1):
             rand_action = np.array(float(rand_action))
             if len(rand_action.shape) == 0:
                 rand_action = np.expand_dims(rand_action, 0)
-        if actors > 1:
-            rand_action = np.array([rand_action for _ in range(actors)])
+        if num_envs > 1:
+            rand_action = np.array([rand_action for _ in range(num_envs)])
         next_state, reward, done, info = env.step(rand_action)
         buffer.push(state, rand_action, reward, next_state, done)
-        if actors > 1:
+        if num_envs > 1:
             done = done.any()
         state = next_state
         steps_this_ep += 1
@@ -126,14 +169,18 @@ def filtered_bc_loss(logs, replay_dict, agent, filter_=True, discrete=False):
             mask = (adv >= 0.0).float()
             adv_weights = mask
     s_rep = agent.encoder(o)
-    dist = agent.actor(s_rep)
-    if discrete:
-        logp_a = dist.log_prob(a.squeeze(1)).unsqueeze(1)
-    else:
-        logp_a = dist.log_prob(a).sum(-1, keepdim=True)
-    if filter_:
-        logp_a *= adv_weights
-    loss = -(logp_a.clamp(-100.0, 100.0)).mean()
+
+    loss = 0.0
+    for actor in agent.actors:
+        dist = actor(s_rep)
+        if discrete:
+            logp_a = dist.log_prob(a.squeeze(1)).unsqueeze(1)
+        else:
+            logp_a = dist.log_prob(a).sum(-1, keepdim=True)
+        if filter_:
+            logp_a *= adv_weights
+        loss += -(logp_a.clamp(-100.0, 100.0)).mean()
+    loss /= len(agent.actors)
     logs["filterd_bc_loss"] = loss.item()
     return loss
 
@@ -141,14 +188,15 @@ def filtered_bc_loss(logs, replay_dict, agent, filter_=True, discrete=False):
 def action_invariance_constraint(logs, replay_dict, agent, a=None):
     oo, _ = replay_dict["original_obs"]
     ao, _ = replay_dict["augmented_obs"]
+    actor = random.choice(agent.actors)
     with torch.no_grad():
         os_rep = agent.encoder(oo)
-        o_dist = agent.actor(os_rep)
+        o_dist = actor(os_rep)
         if a is None:
             a = o_dist.sample()
         o_logp_a = o_dist.log_prob(a).sum(-1, keepdim=True)
     as_rep = agent.encoder(ao)
-    a_dist = agent.actor(as_rep)
+    a_dist = actor(as_rep)
     a_logp_a = a_dist.log_prob(a).sum(-1, keepdim=True)
     return F.mse_loss(o_logp_a, a_logp_a)
 
@@ -176,7 +224,7 @@ def compute_td_targets(
     o, a, r, o1, d = replay_dict["primary_batch"]
     with torch.no_grad():
         s1_rep = target_agent.encoder(o1)
-        a_dist_s1 = agent.actor(s1_rep)
+        a_dist_s1 = random.choice(agent.actors)(s1_rep)
         # REDQ
         ensemble = random.sample(target_agent.critics, ensemble_n)
         if discrete:
@@ -207,7 +255,10 @@ def compute_td_targets(
             agent.popart.update_stats(td_target)
             # normalize TD target
             td_target = agent.popart.normalize_values(td_target)
-    logs["td_target"] = td_target.mean().item()
+    logs["td_targets/mean_td_target"] = td_target.mean().item()
+    logs["td_targets/max_td_target"] = td_target.max().item()
+    logs["td_targets/min_td_target"] = td_target.min().item()
+    logs["td_targets/std_td_target"] = td_target.std().item()
     return td_target
 
 
@@ -239,7 +290,7 @@ def compute_backup_weights(
             weights = torch.sigmoid(-q_std * weight_temp) + 0.5
         elif weight_type == "softmax":
             s1_rep = target_agent.encoder(o1)
-            a1 = agent.actor(s1_rep).sample()
+            a1 = random.choice(agent.actors)(s1_rep).sample()
             if discrete:
                 q_std = torch.stack(
                     [
@@ -253,7 +304,10 @@ def compute_backup_weights(
                     [q(s1_rep, a1) for q in target_agent.critics], dim=0
                 ).std(0)
             weights = batch_size * F.softmax(-q_std * weight_temp, dim=0)
-    logs["bellman_weight"] = weights.mean().item()
+    logs["bellman_weights/mean"] = weights.mean().item()
+    logs["bellman_weights/max"] = weights.max().item()
+    logs["bellman_weights/min"] = weights.min().item()
+    logs["bellman_weights/std"] = weights.std().item()
     return weights
 
 
