@@ -16,7 +16,7 @@ def train_minatar_online(args):
         return DiscreteActionWrapper(MinAtarEnv(args.game))
 
     train_env = SimpleGymWrapper(ParallelActors(make_env, args.parallel_envs))
-    test_env = SimpleGymWrapper(make_env())
+    test_env = SimpleGymWrapper(ParallelActors(make_env, args.parallel_eval_envs))
 
     # create agent
     agent = uafbc.Agent(
@@ -28,7 +28,7 @@ def train_minatar_online(args):
         discrete=True,
         critic_ensemble_size=3,
         actor_ensemble_size=args.actors,
-        ucb_bonus=5.0,
+        ucb_bonus=0.0,
         auto_rescale_targets=True,
         beta_dist=False,
     )
@@ -61,6 +61,7 @@ if __name__ == "__main__":
     parser.add_argument("--game", type=str, default="breakout")
     parser.add_argument("--name", type=str, default="uafbc_minatar_online")
     parser.add_argument("--parallel_envs", type=int, default=1)
+    parser.add_argument("--parallel_eval_envs", type=int, default=1)
     parser.add_argument("--actors", type=int, default=1)
     args = parser.parse_args()
     train_minatar_online(args)
