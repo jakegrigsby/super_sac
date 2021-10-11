@@ -192,7 +192,7 @@ class Agent:
                 act_dists = [actor(state_rep) for actor in self.actors]
                 act_candidates = torch.stack(
                     [dist.sample() for dist in act_dists], dim=0
-                )
+                ).unsqueeze(-1)
                 # act_candidates.shape = (actors, envs, action_dimension)
                 act_dist = random.choice(act_dists)  # not important; used for logging
 
@@ -228,8 +228,6 @@ class Agent:
                     argmax_ucb_val = torch.argmax(ucb_val)
                     act.append(acts_env_i[argmax_ucb_val])
                 act = torch.stack(act, dim=0)
-                if num_envs == 1:
-                    act.squeeze_(1)
             else:
                 # otherwise pick an action from one of the actors
                 act_dist = random.choice(self.actors)(state_rep)
