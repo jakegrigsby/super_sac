@@ -142,24 +142,24 @@ class Agent:
             actor_path = os.path.join(path, "actor{i}.pt")
             actor.load_state_dict(torch.load(actor_path))
 
-    def discrete_forward(self, obs, from_cpu=True):
+    def discrete_forward(self, obs, from_cpu=True, num_envs=1):
         if from_cpu:
-            obs = self._process_obs(obs)
+            obs = self._process_obs(obs, num_envs=num_envs)
         self.eval()
         with torch.no_grad():
             state_rep = self.encoder.forward(obs)
             act_probs = torch.stack(
                 [actor(state_rep).probs for actor in self.actors], dim=0
             ).mean(0)
-            act = torch.argmax(act_probs, dim=1)
+            act = torch.argmax(act_probs, dim=-1)
         self.train()
         if from_cpu:
-            act = self._process_act(act)
+            act = self._process_act(act, num_envs=num_envs)
         return act
 
-    def continuous_forward(self, obs, from_cpu=True):
+    def continuous_forward(self, obs, from_cpu=True, num_envs=1):
         if from_cpu:
-            obs = self._process_obs(obs)
+            obs = self._process_obs(obs, num_envs=num_envs)
         self.eval()
         with torch.no_grad():
             s_rep = self.encoder(obs)
@@ -168,14 +168,14 @@ class Agent:
             )
         self.train()
         if from_cpu:
-            act = self._process_act(act)
+            act = self._process_act(act, num_envs=num_envs)
         return act
 
-    def forward(self, state, from_cpu=True):
+    def forward(self, state, from_cpu=True, num_envs=1):
         if self.discrete:
-            return self.discrete_forward(state, from_cpu)
+            return self.discrete_forward(state, from_cpu=from_cpu, num_envs=num_envs)
         else:
-            return self.continuous_forward(state, from_cpu)
+            return self.continuous_forward(state, from_cpu=from_cpu, num_envs=num_envs)
 
     def sample_action(self, obs, from_cpu=True, num_envs=1, return_dist=False):
         if from_cpu:

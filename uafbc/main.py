@@ -91,9 +91,7 @@ def uafbc(
         return 1
 
     num_envs = _get_parallel_envs(train_env)
-    assert (
-        _get_parallel_envs(test_env) == 1
-    ), "Evaluation Envs are not compatible with parallel sampling."
+    num_eval_envs = _get_parallel_envs(test_env)
 
     if save_to_disk or log_to_disk:
         save_dir = make_process_dirs(name)
@@ -132,6 +130,7 @@ def uafbc(
         f"\tUsing Beta Dist: {not agent.discrete and agent.actors[0].dist_impl == 'beta'}"
     )
     qprint(f"\tParallel Training Envs: {num_envs}")
+    qprint(f"\tParallel Eval Envs: {num_eval_envs}")
     qprint(" -----      -----")
 
     ###########
@@ -237,7 +236,12 @@ def uafbc(
             (step % eval_interval == 0) or (step == total_steps - 1)
         ) and eval_interval > 0:
             mean_return = evaluation.evaluate_agent(
-                agent, test_env, eval_episodes, max_episode_steps, render
+                agent,
+                test_env,
+                eval_episodes,
+                max_episode_steps,
+                render,
+                num_envs=num_eval_envs,
             )
             if log_to_disk:
                 writer.add_scalar("return", mean_return, step)
@@ -385,6 +389,7 @@ def uafbc(
                 max_episode_steps,
                 render,
                 verbosity=verbosity,
+                num_envs=num_eval_envs,
             )
             if log_to_disk:
                 writer.add_scalar("return", mean_return, step)
