@@ -63,7 +63,8 @@ def uafbc(
     # env and eval kwargs
     transitions_per_online_step=1,
     infinite_bootstrap=True,
-    max_episode_steps=1000,
+    ignore_all_dones=False,
+    max_episode_steps=1_000_000,
     eval_episodes=10,
     eval_interval=10_000,
     render=False,
@@ -90,9 +91,7 @@ def uafbc(
         return 1
 
     num_envs = _get_parallel_envs(train_env)
-    assert (
-        _get_parallel_envs(test_env) == 1
-    ), "Evaluation Envs are not compatible with parallel sampling."
+    num_eval_envs = _get_parallel_envs(test_env)
 
     if save_to_disk or log_to_disk:
         save_dir = make_process_dirs(name)
@@ -131,6 +130,7 @@ def uafbc(
         f"\tUsing Beta Dist: {not agent.discrete and agent.actors[0].dist_impl == 'beta'}"
     )
     qprint(f"\tParallel Training Envs: {num_envs}")
+    qprint(f"\tParallel Eval Envs: {num_eval_envs}")
     qprint(" -----      -----")
 
     ###########
@@ -236,7 +236,12 @@ def uafbc(
             (step % eval_interval == 0) or (step == total_steps - 1)
         ) and eval_interval > 0:
             mean_return = evaluation.evaluate_agent(
-                agent, test_env, eval_episodes, max_episode_steps, render
+                agent,
+                test_env,
+                eval_episodes,
+                max_episode_steps,
+                render,
+                num_envs=num_eval_envs,
             )
             if log_to_disk:
                 writer.add_scalar("return", mean_return, step)
@@ -259,14 +264,18 @@ def uafbc(
                 if use_exploration_process:
                     action = random_process.sample(action)
                 next_state, reward, done, info = train_env.step(action)
-                if infinite_bootstrap and steps_this_ep + 1 == max_episode_steps:
-                    # allow infinite bootstrapping
-                    done = (
+                if ignore_all_dones or (
+                    infinite_bootstrap and steps_this_ep + 1 == max_episode_steps
+                ):
+                    # override done to False
+                    buffer_done = (
                         np.expand_dims(np.array([False for _ in range(num_envs)]), 1)
                         if num_envs > 1
                         else False
                     )
-                buffer.push(state, action, reward, next_state, done)
+                else:
+                    buffer_done = done
+                buffer.push(state, action, reward, next_state, buffer_done)
                 if num_envs > 1:
                     done = done.any()
                 state = next_state
@@ -346,7 +355,7 @@ def uafbc(
                     )
                 )
 
-        if init_alpha > 0 and alpha_lr > 0:
+        if init_alpha > 0 and alpha_lr > 0 and (step >= num_steps_offline):
             actor_logs.update(
                 learning.alpha_update(
                     buffer=buffer,
@@ -374,7 +383,13 @@ def uafbc(
             (step % eval_interval == 0) or (step == total_steps - 1)
         ) and eval_interval > 0:
             mean_return = evaluation.evaluate_agent(
-                agent, test_env, eval_episodes, max_episode_steps, render
+                agent,
+                test_env,
+                eval_episodes,
+                max_episode_steps,
+                render,
+                verbosity=verbosity,
+                num_envs=num_eval_envs,
             )
             if log_to_disk:
                 writer.add_scalar("return", mean_return, step)

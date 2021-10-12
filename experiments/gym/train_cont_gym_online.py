@@ -10,7 +10,12 @@ import pybullet
 import pybullet_envs
 
 import uafbc
-from uafbc.wrappers import SimpleGymWrapper, NormActionSpace, ParallelActors, ScaleReward
+from uafbc.wrappers import (
+    SimpleGymWrapper,
+    NormActionSpace,
+    ParallelActors,
+    ScaleReward,
+)
 
 
 class IdentityEncoder(uafbc.nets.Encoder):
@@ -32,7 +37,7 @@ def train_cont_gym_online(args):
         return ScaleReward(NormActionSpace(gym.make(args.env)), args.r_scale)
 
     train_env = SimpleGymWrapper(ParallelActors(make_env, args.parallel_envs))
-    test_env = SimpleGymWrapper(make_env())
+    test_env = SimpleGymWrapper(ParallelActors(make_env, args.parallel_eval_envs))
 
     # create agent
     agent = uafbc.Agent(
@@ -88,6 +93,7 @@ if __name__ == "__main__":
     parser.add_argument("--actors", type=int, default=1)
     parser.add_argument("--critics", type=int, default=2)
     parser.add_argument("--parallel_envs", type=int, default=1)
+    parser.add_argument("--parallel_eval_envs", type=int, default=1)
     parser.add_argument("--popart", action="store_true")
     args = parser.parse_args()
     train_cont_gym_online(args)

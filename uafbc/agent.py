@@ -142,24 +142,24 @@ class Agent:
             actor_path = os.path.join(path, "actor{i}.pt")
             actor.load_state_dict(torch.load(actor_path))
 
-    def discrete_forward(self, obs, from_cpu=True):
+    def discrete_forward(self, obs, from_cpu=True, num_envs=1):
         if from_cpu:
-            obs = self._process_obs(obs)
+            obs = self._process_obs(obs, num_envs=num_envs)
         self.eval()
         with torch.no_grad():
             state_rep = self.encoder.forward(obs)
             act_probs = torch.stack(
                 [actor(state_rep).probs for actor in self.actors], dim=0
             ).mean(0)
-            act = torch.argmax(act_probs, dim=1)
+            act = torch.argmax(act_probs, dim=-1)
         self.train()
         if from_cpu:
-            act = self._process_act(act)
+            act = self._process_act(act, num_envs=num_envs)
         return act
 
-    def continuous_forward(self, obs, from_cpu=True):
+    def continuous_forward(self, obs, from_cpu=True, num_envs=1):
         if from_cpu:
-            obs = self._process_obs(obs)
+            obs = self._process_obs(obs, num_envs=num_envs)
         self.eval()
         with torch.no_grad():
             s_rep = self.encoder(obs)
@@ -168,14 +168,14 @@ class Agent:
             )
         self.train()
         if from_cpu:
-            act = self._process_act(act)
+            act = self._process_act(act, num_envs=num_envs)
         return act
 
-    def forward(self, state, from_cpu=True):
+    def forward(self, state, from_cpu=True, num_envs=1):
         if self.discrete:
-            return self.discrete_forward(state, from_cpu)
+            return self.discrete_forward(state, from_cpu=from_cpu, num_envs=num_envs)
         else:
-            return self.continuous_forward(state, from_cpu)
+            return self.continuous_forward(state, from_cpu=from_cpu, num_envs=num_envs)
 
     def sample_action(self, obs, from_cpu=True, num_envs=1, return_dist=False):
         if from_cpu:
@@ -192,7 +192,7 @@ class Agent:
                 act_dists = [actor(state_rep) for actor in self.actors]
                 act_candidates = torch.stack(
                     [dist.sample() for dist in act_dists], dim=0
-                )
+                ).unsqueeze(-1)
                 # act_candidates.shape = (actors, envs, action_dimension)
                 act_dist = random.choice(act_dists)  # not important; used for logging
 
@@ -228,8 +228,6 @@ class Agent:
                     argmax_ucb_val = torch.argmax(ucb_val)
                     act.append(acts_env_i[argmax_ucb_val])
                 act = torch.stack(act, dim=0)
-                if num_envs == 1:
-                    act.squeeze_(1)
             else:
                 # otherwise pick an action from one of the actors
                 act_dist = random.choice(self.actors)(state_rep)
@@ -250,6 +248,7 @@ class Agent:
 
     def _process_act(self, act, num_envs=1):
         squeeze = lambda tens: tens.squeeze(0) if num_envs == 1 else tens
+        act = squeeze(act)
         if not self.discrete:
-            act = squeeze(act).clamp(-1.0, 1.0)
+            act.clamp_(-1., 1.)
         return act.cpu().numpy()
