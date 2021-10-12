@@ -248,6 +248,7 @@ class Agent:
 
     def _process_act(self, act, num_envs=1):
         squeeze = lambda tens: tens.squeeze(0) if num_envs == 1 else tens
+        act = squeeze(act)
         if not self.discrete:
-            act = squeeze(act).clamp(-1.0, 1.0)
+            act.clamp_(-1., 1.)
         return act.cpu().numpy()
