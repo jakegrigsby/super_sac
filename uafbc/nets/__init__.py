@@ -19,6 +19,10 @@ from abc import ABC, abstractmethod
 
 
 class Encoder(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.have_at_least_one_param = nn.Linear(1, 1)
+
     @property
     @abstractmethod
     def embedding_dim(self):

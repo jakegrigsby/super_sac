@@ -9,6 +9,31 @@ import torch.nn.functional as F
 from . import device, popart, adv_estimator
 
 
+class Critic(nn.Module):
+    def __init__(self, critic_network_cls, critic_kwargs, num_critics):
+        super().__init__()
+        self.nets = nn.ModuleList(
+            [critic_network_cls(**critic_kwargs) for _ in range(num_critics)]
+        )
+        self.num_critics = num_critics
+
+    def forward(self, *args, subset=None, return_min=True):
+        if subset is not None:
+            assert subset > 0
+            # can't directly sample ModuleList
+            ensemble = [
+                self.nets[i] for i in random.sample(range(self.num_critics), k=subset)
+            ]
+        else:
+            ensemble = self.nets
+
+        preds = [q(*args) for q in ensemble]
+        if return_min:
+            return torch.stack(preds, dim=0).min(0).values
+        else:
+            return tuple(preds)
+
+
 class Agent:
     def __init__(
         self,
@@ -17,8 +42,8 @@ class Agent:
         actor_network_cls,
         critic_network_cls,
         discrete=False,
-        critic_ensemble_size=3,
-        actor_ensemble_size=1,
+        ensemble_size=3,
+        num_critics=2,
         ucb_bonus=0.0,
         hidden_size=256,
         auto_rescale_targets=True,
@@ -53,18 +78,20 @@ class Agent:
 
         # create networks
         self.encoder = encoder
-        self.actors = [
-            actor_network_cls(**actor_kwargs) for _ in range(actor_ensemble_size)
-        ]
+        self.actors = [actor_network_cls(**actor_kwargs) for _ in range(ensemble_size)]
         self.critics = [
-            critic_network_cls(**critic_kwargs) for _ in range(critic_ensemble_size)
+            Critic(critic_network_cls, critic_kwargs, num_critics)
+            for _ in range(ensemble_size)
         ]
+
+        self.ensemble_size = ensemble_size
+        self.num_critics = num_critics
 
         # create popart layer if we are autoscaling targets
         if auto_rescale_targets:
-            self.popart = popart.PopArtLayer()
+            self.popart = [popart.PopArtLayer() for _ in range(ensemble_size)]
         else:
-            self.popart = False
+            self.popart = [False for _ in range(ensemble_size)]
 
         # create adv estimator
         if discrete:
@@ -89,19 +116,25 @@ class Agent:
         self.discrete = discrete
         self.ucb_bonus = ucb_bonus
 
+    @property
+    def ensemble(self):
+        return zip(self.actors, self.critics)
+
     def to(self, device):
         for i, actor in enumerate(self.actors):
             self.actors[i] = actor.to(device)
         self.encoder = self.encoder.to(device)
-        if self.popart:
-            self.popart = self.popart.to(device)
+        for i, popart in enumerate(self.popart):
+            if popart:
+                self.popart[i] = popart.to(device)
         for i, critic in enumerate(self.critics):
             self.critics[i] = critic.to(device)
 
     def eval(self):
         self.encoder.eval()
-        if self.popart:
-            self.popart.eval()
+        for popart in self.popart:
+            if popart:
+                popart.eval()
         for critic in self.critics:
             critic.eval()
         for actor in self.actors:
@@ -109,8 +142,9 @@ class Agent:
 
     def train(self):
         self.encoder.train()
-        if self.popart:
-            self.popart.train()
+        for popart in self.popart:
+            if popart:
+                popart.train()
         for critic in self.critics:
             critic.train()
         for actor in self.actors:
@@ -119,9 +153,10 @@ class Agent:
     def save(self, path):
         encoder_path = os.path.join(path, "encoder.pt")
         torch.save(self.encoder.state_dict(), encoder_path)
-        if self.popart:
-            popart_path = os.path.join(path, "popart.pt")
-            torch.save(self.popart.state_dict(), popart_path)
+        for i, popart in enumerate(self.popart):
+            if popart:
+                popart_path = os.path.join(path, "popart{i}.pt")
+                torch.save(popart.state_dict(), popart_path)
         for i, critic in enumerate(self.critics):
             critic_path = os.path.join(path, f"critic{i}.pt")
             torch.save(critic.state_dict(), critic_path)
@@ -132,9 +167,10 @@ class Agent:
     def load(self, path):
         encoder_path = os.path.join(path, "encoder.pt")
         self.encoder.load_state_dict(torch.load(encoder_path))
-        if self.popart:
-            popart_path = os.path.join(path, "popart.pt")
-            self.popart.load_state_dict(torch.load(popart_path))
+        for i, popart in enumerate(self.popart):
+            if popart:
+                popart_path = os.path.join(path, "popart{i}.pt")
+                popart.load_state_dict(torch.load(popart_path))
         for i, critic in enumerate(self.critics):
             critic_path = os.path.join(path, f"critic{i}.pt")
             critic.load_state_dict(torch.load(critic_path))
@@ -165,7 +201,6 @@ class Agent:
             s_rep = self.encoder(obs)
             acts = torch.stack([actor(s_rep).mean for actor in self.actors], dim=0)
             act = acts.mean(0)
-            #std = acts.std(0)
         self.train()
         if from_cpu:
             act = self._process_act(act, num_envs=num_envs)
@@ -251,5 +286,5 @@ class Agent:
         squeeze = lambda tens: tens.squeeze(0) if num_envs == 1 else tens
         act = squeeze(act)
         if not self.discrete:
-            act.clamp_(-1., 1.)
+            act.clamp_(-1.0, 1.0)
         return act.cpu().numpy()
