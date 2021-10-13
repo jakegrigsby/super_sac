@@ -267,7 +267,6 @@ def online_actor_update(
                 if popart and pop:
                     vals = popart(vals)
             else:
-                breakpoint()  # TODO
                 vals = agent.adv_estimator(o, a, ensemble_idx=i)
             entropy_bonus = log_alpha.exp() * a_dist.log_prob(a).sum(
                 -1, keepdim=True

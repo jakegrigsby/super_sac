@@ -4,20 +4,18 @@ import torch
 
 class ReplayBufferStorage:
     def __init__(self, size, state_example, act_example):
-        # regular tensor-based storage
-        self.action_stack = torch.zeros(
-            (size,) + act_example.shape, dtype=torch.float32
-        )
-        self.reward_stack = torch.zeros((size, 1), dtype=torch.float32)
-        self.done_stack = torch.zeros((size, 1), dtype=torch.int)
+        self.action_stack = np.zeros((size,) + act_example.shape, dtype=np.float32)
+        self.reward_stack = np.zeros((size, 1), dtype=np.float32)
+        self.done_stack = np.zeros((size, 1), dtype=np.uint8)
 
         self.s_stack = {}
         self.s1_stack = {}
+        self.s_dtypes = {}
         for label, array in state_example.items():
             shape = (size,) + array.shape
-            dtype = self._convert_dtype(array.dtype)
-            self.s_stack[label] = torch.zeros(shape, dtype=dtype)
-            self.s1_stack[label] = torch.zeros(shape, dtype=dtype)
+            self.s_dtypes[label] = array.dtype
+            self.s_stack[label] = np.zeros(shape, dtype=array.dtype)
+            self.s1_stack[label] = np.zeros(shape, dtype=array.dtype)
 
         self.size = size
         self._next_idx = 0
@@ -33,13 +31,15 @@ class ReplayBufferStorage:
             num_samples = len(a)
         else:
             num_samples = 1
-            r, d = [r], [d]
-        # convert to torch tensors
-        a = torch.from_numpy(a).float()
-        r = torch.Tensor(r).float()
-        d = torch.Tensor(d).int()
-        s = self._make_dict_torch(s)
-        s1 = self._make_dict_torch(s1)
+            r, d = np.array(r), np.array(d)
+
+        a = a.astype(np.float32)
+        r = r.astype(np.float32)
+        d = d.astype(np.uint8)
+
+        s = self._make_dict_dtype(s)
+        s1 = self._make_dict_dtype(s1)
+
         R = np.arange(self._next_idx, self._next_idx + num_samples) % self.size
         for label in s.keys():
             self.s_stack[label][R] = s[label]
@@ -55,21 +55,8 @@ class ReplayBufferStorage:
         self._next_idx = (self._next_idx + num_samples) % self.size
         return R
 
-    def _make_dict_float(self, dict_):
-        return {key: val.float() for key, val in dict_.items()}
-
-    def _make_dict_torch(self, dict_):
-        return {key: torch.from_numpy(val) for key, val in dict_.items()}
-
-    def _convert_dtype(self, dtype):
-        if dtype in [int, np.uint8]:
-            return torch.uint8
-        elif dtype in [float, np.float32, np.float64]:
-            return torch.float32
-        elif dtype in ["int32", np.int32]:
-            return torch.int32
-        else:
-            raise ValueError(f"Uncreocgnized replay buffer dtype: {dtype}")
+    def _make_dict_dtype(self, dict_):
+        return {key: val.astype(self.s_dtypes[key]) for key, val in dict_.items()}
 
     def __getitem__(self, indices):
         try:
@@ -83,13 +70,13 @@ class ReplayBufferStorage:
         state = {}
         next_state = {}
         for label in self.s_stack.keys():
-            state[label] = self.s_stack[label][indices].float()
-            next_state[label] = self.s1_stack[label][indices].float()
-        action = self.action_stack[indices].float()
+            state[label] = torch.from_numpy(self.s_stack[label][indices]).float()
+            next_state[label] = torch.from_numpy(self.s1_stack[label][indices]).float()
+        action = torch.from_numpy(self.action_stack[indices]).float()
         if action.dim() < 2:
             action = action.unsqueeze(1)
-        reward = self.reward_stack[indices]
-        done = self.done_stack[indices]
+        reward = torch.from_numpy(self.reward_stack[indices]).float()
+        done = torch.from_numpy(self.done_stack[indices]).float()
         return (state, action, reward, next_state, done)
 
     def get_all_transitions(self):

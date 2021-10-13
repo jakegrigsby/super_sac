@@ -45,16 +45,17 @@ def train_gym_online(args):
 
     train_env = SimpleGymWrapper(ParallelActors(make_env, args.parallel_envs))
     test_env = SimpleGymWrapper(ParallelActors(make_env, args.parallel_eval_envs))
-    if args.render: train_env.reset(); test_env.reset() # fix common gym render bug
-
+    if args.render:
+        train_env.reset()
+        test_env.reset()  # fix common gym render bug
 
     if discrete:
         actor_network_cls = uafbc.nets.mlps.DiscreteActor
         critic_network_cls = uafbc.nets.mlps.DiscreteCritic
         act_space_size = train_env.action_space.n
     else:
-        actor_network_cls=uafbc.nets.mlps.ContinuousStochasticActor
-        critic_network_cls=uafbc.nets.mlps.ContinuousCritic
+        actor_network_cls = uafbc.nets.mlps.ContinuousStochasticActor
+        critic_network_cls = uafbc.nets.mlps.ContinuousCritic
         act_space_size = train_env.action_space.shape[0]
 
     # create agent
