@@ -45,6 +45,8 @@ def train_gym_online(args):
 
     train_env = SimpleGymWrapper(ParallelActors(make_env, args.parallel_envs))
     test_env = SimpleGymWrapper(ParallelActors(make_env, args.parallel_eval_envs))
+    if args.render: train_env.reset(); test_env.reset() # fix common gym render bug
+
 
     if discrete:
         actor_network_cls = uafbc.nets.mlps.DiscreteActor
@@ -99,6 +101,7 @@ def train_gym_online(args):
         pop=args.popart,
         init_alpha=0.1,
         alpha_lr=1e-4,
+        render=args.render,
     )
 
 
@@ -118,5 +121,6 @@ if __name__ == "__main__":
     parser.add_argument("--hidden_size", type=int, default=256)
     parser.add_argument("--batch_size", type=int, default=512)
     parser.add_argument("--use_exploration_process", action="store_true")
+    parser.add_argument("--render", action="store_true")
     args = parser.parse_args()
     train_gym_online(args)

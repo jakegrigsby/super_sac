@@ -53,6 +53,7 @@ def train_minatar_online(args):
         weighted_bellman_temp=None,
         weight_type=None,
         target_entropy_mul=0.5,
+        render=args.render,
     )
 
 
@@ -63,5 +64,6 @@ if __name__ == "__main__":
     parser.add_argument("--parallel_envs", type=int, default=1)
     parser.add_argument("--parallel_eval_envs", type=int, default=1)
     parser.add_argument("--ensemble_size", type=int, default=1)
+    parser.add_argument("--render", action="store_true")
     args = parser.parse_args()
     train_minatar_online(args)
