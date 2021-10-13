@@ -294,7 +294,6 @@ def compute_backup_weights(
             for actor, critic in agent.ensemble:
                 a1 = actor(s1_rep).sample()
                 if discrete:
-                    breakpoint()
                     q1s.append(critic(s1_rep).gather(1, a1.unsqueeze(1).long()))
                 else:
                     q1s.append(critic(s1_rep, a1))

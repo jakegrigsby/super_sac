@@ -12,7 +12,6 @@ class IdentityEncoder(uafbc.nets.Encoder):
     def __init__(self, dim):
         super().__init__()
         self._dim = dim
-        self.dummy = torch.nn.Linear(1, 1)
 
     @property
     def embedding_dim(self):
@@ -34,10 +33,10 @@ def train_d4rl_gym(args):
         encoder=IdentityEncoder(state_space.shape[0]),
         actor_network_cls=uafbc.nets.mlps.ContinuousStochasticActor,
         critic_network_cls=uafbc.nets.mlps.ContinuousCritic,
-        hidden_size=256,
-        beta_dist=False,
+        hidden_size=512,
         discrete=False,
-        critic_ensemble_size=2,
+        ensemble_size=args.ensemble_size,
+        num_critics=args.num_critics,
         auto_rescale_targets=False,
     )
 
@@ -61,13 +60,15 @@ def train_d4rl_gym(args):
         test_env=test_env,
         buffer=buffer,
         verbosity=1,
-        num_steps_offline=500_000,
+        num_steps_offline=args.steps,
         num_steps_online=0,
         weighted_bellman_temp=None,
         weight_type=None,
         bc_warmup_steps=0,
         name=args.name,
         pop=False,
+        init_alpha=0,
+        alpha_lr=0,
     )
 
 
@@ -75,5 +76,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--env", type=str, default="halfcheetah-medium-expert-v0")
     parser.add_argument("--name", type=str, default="uafbc_d4rl_gym")
+    parser.add_argument("--num_critics", type=int, default=2)
+    parser.add_argument("--ensemble_size", type=int, default=1)
+    parser.add_argument("--steps", type=int, default=500_000)
     args = parser.parse_args()
     train_d4rl_gym(args)
