@@ -139,7 +139,7 @@ class Agent:
             critic_path = os.path.join(path, f"critic{i}.pt")
             critic.load_state_dict(torch.load(critic_path))
         for i, actor in enumerate(self.actors):
-            actor_path = os.path.join(path, "actor{i}.pt")
+            actor_path = os.path.join(path, f"actor{i}.pt")
             actor.load_state_dict(torch.load(actor_path))
 
     def discrete_forward(self, obs, from_cpu=True, num_envs=1):
@@ -151,7 +151,7 @@ class Agent:
             act_probs = torch.stack(
                 [actor(state_rep).probs for actor in self.actors], dim=0
             ).mean(0)
-            act = torch.argmax(act_probs, dim=-1)
+            act = torch.argmax(act_probs, dim=-1, keepdim=True)
         self.train()
         if from_cpu:
             act = self._process_act(act, num_envs=num_envs)
@@ -163,9 +163,9 @@ class Agent:
         self.eval()
         with torch.no_grad():
             s_rep = self.encoder(obs)
-            act = torch.stack([actor(s_rep).mean for actor in self.actors], dim=0).mean(
-                0
-            )
+            acts = torch.stack([actor(s_rep).mean for actor in self.actors], dim=0)
+            act = acts.mean(0)
+            #std = acts.std(0)
         self.train()
         if from_cpu:
             act = self._process_act(act, num_envs=num_envs)
@@ -192,11 +192,12 @@ class Agent:
                 act_dists = [actor(state_rep) for actor in self.actors]
                 act_candidates = torch.stack(
                     [dist.sample() for dist in act_dists], dim=0
-                ).unsqueeze(-1)
+                )
                 # act_candidates.shape = (actors, envs, action_dimension)
                 act_dist = random.choice(act_dists)  # not important; used for logging
 
                 if self.discrete:
+                    act_candidates.unsqueeze_(-1)
                     q_vals = torch.stack(
                         [critic(state_rep) for critic in self.critics],
                         dim=0,

@@ -209,29 +209,29 @@ def online_actor_update(
     clip,
     augmenter,
     aug_mix,
+    critic_ensemble_n=None,
     per=False,
     discrete=False,
     use_baseline=False,
 ):
+    assert critic_ensemble_n is not None
     logs = {}
-    replay_dict = lu.sample_move_and_augment(
-        buffer, batch_size, augmenter, aug_mix, per=per
-    )
-
-    o, *_ = replay_dict["primary_batch"]
-    with torch.no_grad():
-        s_rep = agent.encoder(o)
 
     actor_loss = 0.0
     for actor in agent.actors:
+        replay_dict = lu.sample_move_and_augment(
+            buffer, batch_size, augmenter, aug_mix, per=per
+        )
+        o, *_ = replay_dict["primary_batch"]
+        with torch.no_grad():
+            s_rep = agent.encoder(o)
         a_dist = actor(s_rep)
+        critics = random.sample(agent.critics, k=critic_ensemble_n)
         if discrete:
             probs = a_dist.probs
             log_probs = torch.log_softmax(a_dist.logits, dim=1)
             with torch.no_grad():
-                vals = (
-                    torch.stack([q(s_rep) for q in agent.critics], dim=0).min(0).values
-                )
+                vals = torch.stack([q(s_rep) for q in critics], dim=0).min(0).values
                 if agent.popart and pop:
                     vals = agent.popart(vals)
             vals = (probs * vals).sum(1, keepdim=True)
@@ -239,11 +239,7 @@ def online_actor_update(
         else:
             a = a_dist.rsample()
             if not use_baseline:
-                vals = (
-                    torch.stack([q(s_rep, a) for q in agent.critics], dim=0)
-                    .min(0)
-                    .values
-                )
+                vals = torch.stack([q(s_rep, a) for q in critics], dim=0).min(0).values
                 if agent.popart and pop:
                     vals = agent.popart(vals)
             else:
