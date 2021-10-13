@@ -15,6 +15,7 @@ from uafbc.wrappers import (
     NormActionSpace,
     ParallelActors,
     ScaleReward,
+    DiscreteActionWrapper,
 )
 
 
@@ -31,20 +32,36 @@ class IdentityEncoder(uafbc.nets.Encoder):
         return obs_dict["obs"]
 
 
-def train_cont_gym_online(args):
+def train_gym_online(args):
+    discrete = isinstance(gym.make(args.env).action_space, gym.spaces.Discrete)
+
     def make_env():
-        return ScaleReward(NormActionSpace(gym.make(args.env)), args.r_scale)
+        env = gym.make(args.env)
+        if discrete:
+            env = DiscreteActionWrapper(env)
+        else:
+            env = NormActionSpace(env)
+        return ScaleReward(env, args.r_scale)
 
     train_env = SimpleGymWrapper(ParallelActors(make_env, args.parallel_envs))
     test_env = SimpleGymWrapper(ParallelActors(make_env, args.parallel_eval_envs))
 
+    if discrete:
+        actor_network_cls = uafbc.nets.mlps.DiscreteActor
+        critic_network_cls = uafbc.nets.mlps.DiscreteCritic
+        act_space_size = train_env.action_space.n
+    else:
+        actor_network_cls=uafbc.nets.mlps.ContinuousStochasticActor
+        critic_network_cls=uafbc.nets.mlps.ContinuousCritic
+        act_space_size = train_env.action_space.shape[0]
+
     # create agent
     agent = uafbc.Agent(
-        act_space_size=train_env.action_space.shape[0],
+        act_space_size=act_space_size,
         encoder=IdentityEncoder(train_env.observation_space.shape[0]),
-        actor_network_cls=uafbc.nets.mlps.ContinuousStochasticActor,
-        critic_network_cls=uafbc.nets.mlps.ContinuousCritic,
-        discrete=False,
+        actor_network_cls=actor_network_cls,
+        critic_network_cls=critic_network_cls,
+        discrete=discrete,
         ensemble_size=args.ensemble_size,
         num_critics=args.num_critics,
         hidden_size=args.hidden_size,
@@ -78,6 +95,7 @@ def train_cont_gym_online(args):
         max_episode_steps=1000,
         eval_interval=args.eval_interval,
         log_interval=args.log_interval,
+        use_exploration_process=args.use_exploration_process,
         pop=args.popart,
         init_alpha=0.1,
         alpha_lr=1e-4,
@@ -99,5 +117,6 @@ if __name__ == "__main__":
     parser.add_argument("--log_interval", type=int, default=5_000)
     parser.add_argument("--hidden_size", type=int, default=256)
     parser.add_argument("--batch_size", type=int, default=512)
+    parser.add_argument("--use_exploration_process", action="store_true")
     args = parser.parse_args()
-    train_cont_gym_online(args)
+    train_gym_online(args)
