@@ -26,8 +26,8 @@ def train_minatar_online(args):
         critic_network_cls=uafbc.nets.mlps.DiscreteCritic,
         hidden_size=256,
         discrete=True,
-        critic_ensemble_size=3,
-        actor_ensemble_size=args.actors,
+        num_critics=2,
+        ensemble_size=args.ensemble_size,
         ucb_bonus=0.0,
         auto_rescale_targets=True,
         beta_dist=False,
@@ -50,8 +50,8 @@ def train_minatar_online(args):
         random_warmup_steps=10_000,
         max_episode_steps=100_000,
         pop=True,
-        weighted_bellman_temp=10.0,
-        weight_type="softmax",
+        weighted_bellman_temp=None,
+        weight_type=None,
         target_entropy_mul=0.5,
     )
 
@@ -62,6 +62,6 @@ if __name__ == "__main__":
     parser.add_argument("--name", type=str, default="uafbc_minatar_online")
     parser.add_argument("--parallel_envs", type=int, default=1)
     parser.add_argument("--parallel_eval_envs", type=int, default=1)
-    parser.add_argument("--actors", type=int, default=1)
+    parser.add_argument("--ensemble_size", type=int, default=1)
     args = parser.parse_args()
     train_minatar_online(args)

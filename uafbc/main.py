@@ -116,11 +116,10 @@ def uafbc(
     qprint(f"\tCritic Ensemble Size: {agent.num_critics}")
     if target_critic_ensemble_n > agent.num_critics:
         target_critic_ensemble_n = agent.num_critics
-        qprint("\t\tWarning: too many redq target agent critics. overriding.")
+        qprint("\t\tWarning: too many redq target agent critics. Overriding.")
     qprint(f"\tTD Target Critic Ensemble Size: {target_critic_ensemble_n}")
     qprint(f"\tCritic Updates per Step: {critic_updates_per_step}")
     qprint(f"\tDiscrete Actions: {agent.discrete}")
-    qprint(f"\tActor Ensemble Size: {len(agent.actors)}")
     qprint(f"\tActor Updates per Online Step: {online_actor_updates_per_step}")
     qprint(f"\tActor Updates per Offline Step: {offline_actor_updates_per_step}")
     qprint(f"\tQ-Value Uncertainty Exploration Bonus: {agent.ucb_bonus}")

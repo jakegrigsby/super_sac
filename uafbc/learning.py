@@ -132,21 +132,33 @@ def offline_actor_update(
     filter_=True,
 ):
     logs = {}
-    replay_dict = lu.sample_move_and_augment(
-        buffer=buffer,
-        batch_size=batch_size,
-        augmenter=augmenter,
-        aug_mix=aug_mix,
-        per=per,
-    )
 
     # build loss function
-    loss = lu.filtered_bc_loss(
-        logs, replay_dict, agent, filter_=filter_, discrete=discrete
-    )
-    if actor_lambda:
-        loss += actor_lambda * lu.action_invariance_constraint(logs, replay_dict, agent)
-
+    loss = 0.0
+    for ensemble_idx in range(agent.ensemble_size):
+        replay_dict = lu.sample_move_and_augment(
+            buffer=buffer,
+            batch_size=batch_size,
+            augmenter=augmenter,
+            aug_mix=aug_mix,
+            per=per,
+        )
+        loss += lu.filtered_bc_loss(
+            logs=logs,
+            replay_dict=replay_dict,
+            agent=agent,
+            ensemble_idx=ensemble_idx,
+            filter_=filter_,
+            discrete=discrete,
+        )
+        if actor_lambda:
+            loss += actor_lambda * lu.action_invariance_constraint(
+                logs=logs,
+                replay_dict=replay_dict,
+                agent=agent,
+                ensemble_idx=ensemble_idx,
+            )
+    loss /= agent.ensemble_size
     # take gradient step
     optimizer.zero_grad()
     loss.backward()
@@ -158,7 +170,7 @@ def offline_actor_update(
 
     if per:
         lu.adjust_priorities(logs, replay_dict, agent, buffer)
-    logs["losses/offline_actor_loss"] = loss.item()
+    logs["losses/filtered_bc_overall_loss"] = loss.item()
     logs["gradients/actor_offline_grad_norm"] = lu.get_grad_norm(
         random.choice(agent.actors)
     )

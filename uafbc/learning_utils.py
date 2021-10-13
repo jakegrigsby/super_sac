@@ -163,37 +163,34 @@ def compute_filter_stats(
     return pct_accepted.item()
 
 
-def filtered_bc_loss(logs, replay_dict, agent, filter_=True, discrete=False):
-    # TODO
-    breakpoint()
+def filtered_bc_loss(
+    logs, replay_dict, agent, ensemble_idx, filter_=True, discrete=False
+):
     o, a, *_ = replay_dict["primary_batch"]
     if filter_:
         with torch.no_grad():
-            adv = agent.adv_estimator(o, a)
+            adv = agent.adv_estimator(o, a, ensemble_idx=ensemble_idx)
             # binary filter
             mask = (adv >= 0.0).float()
             adv_weights = mask
-    s_rep = agent.encoder(o)
-
-    loss = 0.0
-    for actor in agent.actors:
-        dist = actor(s_rep)
-        if discrete:
-            logp_a = dist.log_prob(a.squeeze(1)).unsqueeze(1)
-        else:
-            logp_a = dist.log_prob(a).sum(-1, keepdim=True)
-        if filter_:
-            logp_a *= adv_weights
-        loss += -(logp_a.clamp(-100.0, 100.0)).mean()
-    loss /= len(agent.actors)
-    logs["filterd_bc_loss"] = loss.item()
+    with torch.no_grad():
+        s_rep = agent.encoder(o)
+    dist = agent.actors[ensemble_idx](s_rep)
+    if discrete:
+        logp_a = dist.log_prob(a.squeeze(1)).unsqueeze(1)
+    else:
+        logp_a = dist.log_prob(a).sum(-1, keepdim=True)
+    if filter_:
+        logp_a *= adv_weights
+    loss = -(logp_a.clamp(-100.0, 100.0)).mean()
+    logs[f"losses/filterd_bc_loss_{ensemble_idx}"] = loss.item()
     return loss
 
 
-def action_invariance_constraint(logs, replay_dict, agent, a=None):
+def action_invariance_constraint(logs, replay_dict, agent, ensemble_idx, a=None):
     oo, _ = replay_dict["original_obs"]
     ao, _ = replay_dict["augmented_obs"]
-    actor = random.choice(agent.actors)
+    actor = agent.actors[ensemble_idx]
     with torch.no_grad():
         os_rep = agent.encoder(oo)
         o_dist = actor(os_rep)
@@ -207,11 +204,11 @@ def action_invariance_constraint(logs, replay_dict, agent, a=None):
 
 
 def adjust_priorities(logs, replay_dict, agent, buffer):
-    breakpoint()
     o, a, *_ = replay_dict["primary_batch"]
     priority_idxs = replay_dict["priority_idxs"]
     with torch.no_grad():
-        adv = agent.adv_estimator(o, a)
+        random_ensemble_member = random.choice(range(agent.ensemble_size))
+        adv = agent.adv_estimator(o, a, random_ensemble_member)
     new_priorities = (F.relu(adv) + 1e-5).cpu().detach().squeeze(1).numpy()
     buffer.update_priorities(priority_idxs, new_priorities)
 
