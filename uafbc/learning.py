@@ -81,7 +81,7 @@ def critic_update(
             q_preds = agent.critics[i](s_rep, a, subset=None, return_min=False)
         for q_pred in q_preds:
             if discrete:
-                q_pred = q_pred(s_rep).gather(1, a.long())
+                q_pred = q_pred.gather(1, a.long())
             if agent.popart[i] and pop:
                 q_pred = agent.popart[i](q_pred)
             td_error = td_target - q_pred
