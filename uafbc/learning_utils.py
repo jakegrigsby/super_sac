@@ -135,6 +135,7 @@ def sample_move_and_augment(buffer, batch_size, augmenter, aug_mix, per=True):
     for lbl in o.keys():
         o[lbl][:aug_mix_idx] = ao[lbl][:aug_mix_idx]
         o1[lbl][:aug_mix_idx] = ao1[lbl][:aug_mix_idx]
+
     return {
         "primary_batch": (o, a, r, o1, d),
         "augmented_obs": (ao, ao1),

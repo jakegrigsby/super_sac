@@ -40,12 +40,13 @@ class AdvantageEstimator(nn.Module):
 
     def discrete_indirect_forward(self, obs, action, ensemble_idx):
         state_rep = self.encoder(obs)
-        # V(s) = E_{a ~ \pi(s)} [Q(s, a)]
-        probs = torch.stack(
-            [actor(state_rep).probs for actor in self.actors], dim=0
-        ).mean(0)
-        min_q = self.pop(ensemble_idx, state_rep)
-        value = (probs * min_q).sum(1, keepdim=True)
+        with torch.no_grad():
+            # V(s) = E_{a ~ \pi(s)} [Q(s, a)]
+            probs = torch.stack(
+                [actor(state_rep).probs for actor in self.actors], dim=0
+            ).mean(0)
+            min_q = self.pop(ensemble_idx, state_rep)
+            value = (probs * min_q).sum(1, keepdim=True)
 
         # Q(s, a)
         q_preds = self.pop(ensemble_idx, state_rep).gather(1, action.long())

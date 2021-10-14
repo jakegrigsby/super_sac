@@ -189,23 +189,20 @@ def alpha_update(
     discrete,
 ):
     logs = {}
-
-    # cutting corners here and using the same batch for each ensemble member.
-    replay_dict = lu.sample_move_and_augment(
-        buffer=buffer,
-        batch_size=batch_size,
-        augmenter=augmenter,
-        per=False,
-        aug_mix=aug_mix,
-    )
-    o, *_ = replay_dict["primary_batch"]
-
-    with torch.no_grad():
-        s_rep = agent.encoder(o)
-
     for i in range(agent.ensemble_size):
+        replay_dict = lu.sample_move_and_augment(
+            buffer=buffer,
+            batch_size=batch_size,
+            augmenter=augmenter,
+            per=False,
+            aug_mix=aug_mix,
+        )
+        o, *_ = replay_dict["primary_batch"]
+
         with torch.no_grad():
+            s_rep = agent.encoder(o)
             a_dist = agent.actors[i](s_rep)
+
         if discrete:
             logp_a = (a_dist.probs * torch.log_softmax(a_dist.logits, dim=1)).sum(-1)
         else:
@@ -244,7 +241,11 @@ def online_actor_update(
         zip(agent.ensemble, agent.popart, log_alphas)
     ):
         replay_dict = lu.sample_move_and_augment(
-            buffer, batch_size, augmenter, aug_mix, per=per
+            buffer=buffer,
+            batch_size=batch_size,
+            augmenter=augmenter,
+            aug_mix=aug_mix,
+            per=per,
         )
         o, *_ = replay_dict["primary_batch"]
         with torch.no_grad():

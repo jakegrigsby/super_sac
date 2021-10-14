@@ -38,6 +38,8 @@ def train_dmc_online(args):
         hidden_size=1024,
         discrete=False,
         auto_rescale_targets=False,
+        log_std_low=-5.,
+        log_std_high=2.,
     )
 
     buffer = uafbc.replay.PrioritizedReplayBuffer(size=1_000_000)
@@ -54,7 +56,7 @@ def train_dmc_online(args):
         actor_lr=1e-4,
         critic_lr=1e-4,
         encoder_lr=1e-4,
-        batch_size=512,
+        batch_size=1024,
         weighted_bellman_temp=None,
         weight_type=None,
         use_bc_update_online=False,
