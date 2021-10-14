@@ -37,8 +37,9 @@ def train_dmcr_online(args):
         encoder=DMCREncoder(train_env.observation_space.shape),
         actor_network_cls=uafbc.nets.mlps.ContinuousStochasticActor,
         critic_network_cls=uafbc.nets.mlps.ContinuousCritic,
-        critic_ensemble_size=2,
-        hidden_size=1024,
+        ensemble_size=1,
+        num_critics=2,
+        hidden_size=512,
         discrete=False,
         auto_rescale_targets=False,
         beta_dist=False,
@@ -58,7 +59,7 @@ def train_dmcr_online(args):
         actor_lr=1e-4,
         critic_lr=1e-4,
         encoder_lr=1e-4,
-        batch_size=512,
+        batch_size=256,
         weighted_bellman_temp=None,
         weight_type=None,
         use_bc_update_online=False,
@@ -67,7 +68,7 @@ def train_dmcr_online(args):
         random_warmup_steps=10_000,
         max_episode_steps=1000,
         pop=False,
-        augmenter=AugmentationSequence([DrqAug(512)]),
+        augmenter=AugmentationSequence([DrqAug(256)]),
     )
 
 
