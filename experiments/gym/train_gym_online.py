@@ -95,7 +95,7 @@ def train_gym_online(args):
         num_steps_offline=0,
         num_steps_online=1_000_000,
         random_warmup_steps=10_000,
-        max_episode_steps=1000,
+        max_episode_steps=args.max_episode_steps,
         eval_interval=args.eval_interval,
         log_interval=args.log_interval,
         use_exploration_process=args.use_exploration_process,
@@ -123,5 +123,6 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", type=int, default=512)
     parser.add_argument("--use_exploration_process", action="store_true")
     parser.add_argument("--render", action="store_true")
+    parser.add_argument("--max_episode_steps", type=int, default=1000)
     args = parser.parse_args()
     train_gym_online(args)
