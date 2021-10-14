@@ -135,6 +135,7 @@ def sample_move_and_augment(buffer, batch_size, augmenter, aug_mix, per=True):
     for lbl in o.keys():
         o[lbl][:aug_mix_idx] = ao[lbl][:aug_mix_idx]
         o1[lbl][:aug_mix_idx] = ao1[lbl][:aug_mix_idx]
+
     return {
         "primary_batch": (o, a, r, o1, d),
         "augmented_obs": (ao, ao1),
@@ -154,41 +155,43 @@ def compute_filter_stats(
     o = _move_dict_to_device(o)
     a = a.to(device)
     with torch.no_grad():
-        adv = agent.adv_estimator(o, a)
+        # use a random member of the ensemble to compute binary advantage filter stats
+        adv = agent.adv_estimator(
+            o, a, ensemble_idx=random.choice(range(agent.ensemble_size))
+        )
         exp_filter = (adv >= 0.0).float()
     pct_accepted = (exp_filter.sum().float() / exp_filter.shape[0]) * 100.0
     return pct_accepted.item()
 
 
-def filtered_bc_loss(logs, replay_dict, agent, filter_=True, discrete=False):
+def filtered_bc_loss(
+    logs, replay_dict, agent, ensemble_idx, filter_=True, discrete=False
+):
     o, a, *_ = replay_dict["primary_batch"]
     if filter_:
         with torch.no_grad():
-            adv = agent.adv_estimator(o, a)
+            adv = agent.adv_estimator(o, a, ensemble_idx=ensemble_idx)
             # binary filter
             mask = (adv >= 0.0).float()
             adv_weights = mask
-    s_rep = agent.encoder(o)
-
-    loss = 0.0
-    for actor in agent.actors:
-        dist = actor(s_rep)
-        if discrete:
-            logp_a = dist.log_prob(a.squeeze(1)).unsqueeze(1)
-        else:
-            logp_a = dist.log_prob(a).sum(-1, keepdim=True)
-        if filter_:
-            logp_a *= adv_weights
-        loss += -(logp_a.clamp(-100.0, 100.0)).mean()
-    loss /= len(agent.actors)
-    logs["filterd_bc_loss"] = loss.item()
+    with torch.no_grad():
+        s_rep = agent.encoder(o)
+    dist = agent.actors[ensemble_idx](s_rep)
+    if discrete:
+        logp_a = dist.log_prob(a.squeeze(1)).unsqueeze(1)
+    else:
+        logp_a = dist.log_prob(a).sum(-1, keepdim=True)
+    if filter_:
+        logp_a *= adv_weights
+    loss = -(logp_a.clamp(-100.0, 100.0)).mean()
+    logs[f"losses/filterd_bc_loss_{ensemble_idx}"] = loss.item()
     return loss
 
 
-def action_invariance_constraint(logs, replay_dict, agent, a=None):
+def action_invariance_constraint(logs, replay_dict, agent, ensemble_idx, a=None):
     oo, _ = replay_dict["original_obs"]
     ao, _ = replay_dict["augmented_obs"]
-    actor = random.choice(agent.actors)
+    actor = agent.actors[ensemble_idx]
     with torch.no_grad():
         os_rep = agent.encoder(oo)
         o_dist = actor(os_rep)
@@ -205,7 +208,8 @@ def adjust_priorities(logs, replay_dict, agent, buffer):
     o, a, *_ = replay_dict["primary_batch"]
     priority_idxs = replay_dict["priority_idxs"]
     with torch.no_grad():
-        adv = agent.adv_estimator(o, a)
+        random_ensemble_member = random.choice(range(agent.ensemble_size))
+        adv = agent.adv_estimator(o, a, random_ensemble_member)
     new_priorities = (F.relu(adv) + 1e-5).cpu().detach().squeeze(1).numpy()
     buffer.update_priorities(priority_idxs, new_priorities)
 
@@ -215,24 +219,25 @@ def compute_td_targets(
     replay_dict,
     agent,
     target_agent,
+    ensemble_idx,
     ensemble_n,
-    log_alpha,
+    log_alphas,
     pop,
     gamma,
     discrete=False,
 ):
     o, a, r, o1, d = replay_dict["primary_batch"]
+
+    actor = agent.actors[ensemble_idx]
+    target_critic = target_agent.critics[ensemble_idx]
+    popart = agent.popart[ensemble_idx]
+    log_alpha = log_alphas[ensemble_idx]
+
     with torch.no_grad():
         s1_rep = target_agent.encoder(o1)
-        a_dist_s1 = random.choice(agent.actors)(s1_rep)
-        # REDQ
-        ensemble = random.sample(target_agent.critics, ensemble_n)
+        a_dist_s1 = actor(s1_rep)
         if discrete:
-            ensemble_preds = torch.stack(
-                [critic(s1_rep) for critic in ensemble],
-                dim=0,
-            )
-            s1_q_pred = ensemble_preds.min(0).values
+            s1_q_pred = target_critic(s1_rep, subset=ensemble_n)
             probs = a_dist_s1.probs
             log_probs = torch.log_softmax(a_dist_s1.logits, dim=1)
             val_s1 = (probs * (s1_q_pred - log_alpha.exp() * log_probs)).sum(
@@ -241,24 +246,20 @@ def compute_td_targets(
         else:
             a_s1 = a_dist_s1.sample()
             logp_a1 = a_dist_s1.log_prob(a_s1).sum(-1, keepdim=True)
-            ensemble_preds = torch.stack(
-                [critic(s1_rep, a_s1) for critic in ensemble], dim=0
-            )
-            val_s1 = ensemble_preds.min(0).values - (log_alpha.exp() * logp_a1)
-        if agent.popart and pop:
+            s1_q_pred = target_critic(s1_rep, a_s1, subset=ensemble_n)
+            val_s1 = s1_q_pred - (log_alpha.exp() * logp_a1)
+        if popart and pop:
             # denormalize target
-            val_s1 = agent.popart(val_s1, normalized=False)
+            val_s1 = popart(val_s1, normalized=False)
         td_target = r + gamma * (1.0 - d) * val_s1
 
-        if agent.popart:
+        if popart:
             # update popart stats
-            agent.popart.update_stats(td_target)
+            popart.update_stats(td_target)
             # normalize TD target
-            td_target = agent.popart.normalize_values(td_target)
-    logs["td_targets/mean_td_target"] = td_target.mean().item()
-    logs["td_targets/max_td_target"] = td_target.max().item()
-    logs["td_targets/min_td_target"] = td_target.min().item()
-    logs["td_targets/std_td_target"] = td_target.std().item()
+            td_target = popart.normalize_values(td_target)
+    logs[f"td_targets/mean_td_target_{ensemble_idx}"] = td_target.mean().item()
+    logs[f"td_targets/std_td_target_{ensemble_idx}"] = td_target.std().item()
     return td_target
 
 
@@ -272,7 +273,7 @@ def compute_backup_weights(
     batch_size,
     discrete=False,
 ):
-    if weight_type is None or weight_temp is None:
+    if weight_type is None or weight_temp is None or agent.ensemble_size == 1:
         return 1.0
 
     o, a, _, o1, _ = replay_dict["primary_batch"]
@@ -290,19 +291,14 @@ def compute_backup_weights(
             weights = torch.sigmoid(-q_std * weight_temp) + 0.5
         elif weight_type == "softmax":
             s1_rep = target_agent.encoder(o1)
-            a1 = random.choice(agent.actors)(s1_rep).sample()
-            if discrete:
-                q_std = torch.stack(
-                    [
-                        q(s1_rep).gather(1, a1.unsqueeze(1).long())
-                        for q in target_agent.critics
-                    ],
-                    dim=0,
-                ).std(0)
-            else:
-                q_std = torch.stack(
-                    [q(s1_rep, a1) for q in target_agent.critics], dim=0
-                ).std(0)
+            q1s = []
+            for actor, critic in agent.ensemble:
+                a1 = actor(s1_rep).sample()
+                if discrete:
+                    q1s.append(critic(s1_rep).gather(1, a1.unsqueeze(1).long()))
+                else:
+                    q1s.append(critic(s1_rep, a1))
+            q_std = torch.stack(q1s, dim=0).std(0)
             weights = batch_size * F.softmax(-q_std * weight_temp, dim=0)
     logs["bellman_weights/mean"] = weights.mean().item()
     logs["bellman_weights/max"] = weights.max().item()

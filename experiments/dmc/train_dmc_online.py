@@ -14,7 +14,6 @@ class IdentityEncoder(uafbc.nets.Encoder):
     def __init__(self, dim):
         super().__init__()
         self._dim = dim
-        self.dummy = torch.nn.Linear(1, 1)
 
     @property
     def embedding_dim(self):
@@ -34,11 +33,13 @@ def train_dmc_online(args):
         encoder=IdentityEncoder(train_env.observation_space.shape[0]),
         actor_network_cls=uafbc.nets.mlps.ContinuousStochasticActor,
         critic_network_cls=uafbc.nets.mlps.ContinuousCritic,
-        critic_ensemble_size=2,
+        ensemble_size=args.ensemble_size,
+        num_critics=args.num_critics,
         hidden_size=1024,
         discrete=False,
         auto_rescale_targets=False,
-        beta_dist=True,
+        log_std_low=-5.,
+        log_std_high=2.,
     )
 
     buffer = uafbc.replay.PrioritizedReplayBuffer(size=1_000_000)
@@ -55,7 +56,7 @@ def train_dmc_online(args):
         actor_lr=1e-4,
         critic_lr=1e-4,
         encoder_lr=1e-4,
-        batch_size=512,
+        batch_size=1024,
         weighted_bellman_temp=None,
         weight_type=None,
         use_bc_update_online=False,
@@ -71,6 +72,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--domain", type=str, default="walker")
     parser.add_argument("--task", type=str, default="walk")
-    parser.add_argument("--name", type=str, default="uafbc_adv_baseline_beta_dist_walker_walk")
+    parser.add_argument("--name", type=str, default="uafbc_dmc")
+    parser.add_argument("--ensemble_size", type=int, default=1)
+    parser.add_argument("--num_critics", type=int, default=2)
     args = parser.parse_args()
     train_dmc_online(args)

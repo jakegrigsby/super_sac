@@ -41,11 +41,11 @@ def evaluate_agent(
 ):
     agent.eval()
     returns = run_env(
-        agent,
-        env,
-        eval_episodes,
-        max_episode_steps,
-        render,
+        agent=agent,
+        env=env,
+        episodes=eval_episodes,
+        max_steps=max_episode_steps,
+        render=render,
         verbosity=verbosity,
         num_envs=num_envs,
     )

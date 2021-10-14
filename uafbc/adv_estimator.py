@@ -27,82 +27,63 @@ class AdvantageEstimator(nn.Module):
         self.discrete = discrete
         self.discrete_method = discrete_method
 
-    def pop(self, q, *args):
-        if self.popart:
-            return self.popart(q(*args))
+    def pop(self, ensemble_idx, *args):
+        q = self.critics[ensemble_idx](*args)
+        if self.popart[ensemble_idx]:
+            return self.popart[ensemble_idx](q)
         else:
-            return q(*args)
+            return q
 
     def discrete_direct_forward(self, obs, action):
         # use dueling arch adv
         raise NotImplementedError
 
-    def discrete_indirect_forward(self, obs, action):
+    def discrete_indirect_forward(self, obs, action, ensemble_idx):
         state_rep = self.encoder(obs)
-        # V(s) = E_{a ~ \pi(s)} [Q(s, a)]
-        probs = torch.stack(
-            [actor(state_rep).probs for actor in self.actors], dim=0
-        ).mean(0)
-        min_q = (
-            torch.stack([self.pop(q, state_rep) for q in self.critics], dim=0)
-            .min(0)
-            .values
-        )
-        value = (probs * min_q).sum(1, keepdim=True)
+        with torch.no_grad():
+            # V(s) = E_{a ~ \pi(s)} [Q(s, a)]
+            probs = torch.stack(
+                [actor(state_rep).probs for actor in self.actors], dim=0
+            ).mean(0)
+            min_q = self.pop(ensemble_idx, state_rep)
+            value = (probs * min_q).sum(1, keepdim=True)
 
         # Q(s, a)
-        q_preds = (
-            torch.stack(
-                [self.pop(q, state_rep).gather(1, action.long()) for q in self.critics],
-                dim=0,
-            )
-            .min(0)
-            .values
-        )
+        q_preds = self.pop(ensemble_idx, state_rep).gather(1, action.long())
 
         # A(s, a) = Q(s, a) - V(s)
         adv = q_preds - value
         return adv
 
-    def continuous_forward(self, obs, action, n=4):
+    def continuous_forward(self, obs, action, ensemble_idx, n=4):
         with torch.no_grad():
             # get an action distribution from the policy
             state_rep = self.encoder(obs)
-            actions = [random.choice(self.actors)(state_rep).sample() for _ in range(n)]
+            policy_actions = [
+                self.actors[ensemble_idx](state_rep).sample() for _ in range(n)
+            ]
             # get the q value for each of the n actions
-            qs = []
-            for act in actions:
-                q_a_preds = (
-                    torch.stack(
-                        [self.pop(critic, state_rep, act) for critic in self.critics],
-                        dim=0,
-                    )
-                    .min(0)
-                    .values
-                )
-                qs.append(q_a_preds)
+            q_a_preds = torch.stack(
+                [self.pop(ensemble_idx, state_rep, act) for act in policy_actions],
+                dim=0,
+            )
             if self.cont_method == "mean":
                 # V(s) = E_{a ~ \pi(s)} [Q(s, a)]
-                value = torch.stack(qs, dim=0).mean(0)
+                value = q_a_preds.mean(0)
             elif self.cont_method == "max":
                 # Optimisitc value estimate: V(s) = max_{a1, a2, a3, ..., aN}(Q(s, a))
-                value = torch.stack(qs, dim=0).max(0).values
-        q_preds = (
-            torch.stack(
-                [self.pop(critic, state_rep, action) for critic in self.critics], dim=0
-            )
-            .min(0)
-            .values
-        )
+                value = q_a_preds.max(0).values
+        q_preds = self.pop(ensemble_idx, state_rep, action)
         # A(s, a) = Q(s, a) - V(s)
         adv = q_preds - value
         return adv
 
-    def forward(self, obs, action):
+    def forward(self, obs, action, ensemble_idx):
+        # TODO
         if self.discrete:
             if self.discrete_method == "indirect":
-                return self.discrete_indirect_forward(obs, action)
+                return self.discrete_indirect_forward(obs, action, ensemble_idx)
             elif self.discrete_method == "direct":
-                return self.discrete_direct_forward(obs, action)
+                return self.discrete_direct_forward(obs, action, ensemble_idx)
         else:
-            return self.continuous_forward(obs, action)
+            return self.continuous_forward(obs, action, ensemble_idx)

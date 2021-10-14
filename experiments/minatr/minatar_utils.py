@@ -30,6 +30,9 @@ class MinAtarEnv(gym.Wrapper):
     def num_channels(self):
         return self.env.state_shape()[-1]
 
+    def render(self, *args, **kwargs):
+        self.env.display_state()
+
 
 class MinAtarEncoder(nets.Encoder):
     def __init__(self, channels, emb_dim=50):

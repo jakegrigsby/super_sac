@@ -42,9 +42,9 @@ def train_atari(args):
         critic_network_cls=uafbc.nets.mlps.DiscreteCritic,
         hidden_size=256,
         discrete=True,
-        critic_ensemble_size=2,
+        num_critics=2,
+        ensemble_size=1,
         auto_rescale_targets=args.popart,
-        beta_dist=False,
     )
 
     buffer = uafbc.replay.PrioritizedReplayBuffer(size=250_000)
@@ -63,9 +63,9 @@ def train_atari(args):
         num_steps_online=args.steps,
         random_warmup_steps=50_000,
         max_episode_steps=108_000,
-        actor_clip=10.0,
-        critic_clip=10.0,
-        encoder_clip=10.0,
+        actor_clip=40.0,
+        critic_clip=40.0,
+        encoder_clip=40.0,
         batch_size=64,
         pop=args.popart,
         weighted_bellman_temp=None,

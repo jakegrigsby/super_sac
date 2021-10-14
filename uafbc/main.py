@@ -106,17 +106,20 @@ def uafbc(
 
     qprint = lambda x: print(x) if verbosity else None
     qprint(" ----- AFBC -----")
-    qprint(f"\tART: {agent.popart is not False}")
+    qprint(f"\tART: {agent.popart[0] is not False}")
     qprint(f"\tPOP: {pop}")
     qprint(
         f"\tBellman Backup Weight Type: {weight_type}; Temperature: {weighted_bellman_temp}"
     )
     qprint(f"\tBC Warmup Steps: {bc_warmup_steps}")
-    qprint(f"\tCritic Ensemble Size: {len(agent.critics)}")
+    qprint(f"\tEnsemble Size: {agent.ensemble_size}")
+    qprint(f"\tCritic Ensemble Size: {agent.num_critics}")
+    if target_critic_ensemble_n > agent.num_critics:
+        target_critic_ensemble_n = agent.num_critics
+        qprint("\t\tWarning: too many redq target agent critics. Overriding.")
     qprint(f"\tTD Target Critic Ensemble Size: {target_critic_ensemble_n}")
     qprint(f"\tCritic Updates per Step: {critic_updates_per_step}")
     qprint(f"\tDiscrete Actions: {agent.discrete}")
-    qprint(f"\tActor Ensemble Size: {len(agent.actors)}")
     qprint(f"\tActor Updates per Online Step: {online_actor_updates_per_step}")
     qprint(f"\tActor Updates per Offline Step: {offline_actor_updates_per_step}")
     qprint(f"\tQ-Value Uncertainty Exploration Bonus: {agent.ucb_bonus}")
@@ -173,9 +176,15 @@ def uafbc(
 
     # max entropy
     init_alpha = max(init_alpha, 1e-11)
-    log_alpha = torch.Tensor([math.log(init_alpha)]).to(device)
-    log_alpha.requires_grad = True
-    log_alpha_optimizer = torch.optim.Adam([log_alpha], lr=alpha_lr, betas=(0.5, 0.999))
+    log_alphas = []
+    log_alpha_optimizers = []
+    for _ in range(agent.ensemble_size):
+        log_alpha = torch.Tensor([math.log(init_alpha)]).to(device)
+        log_alpha.requires_grad = True
+        log_alphas.append(log_alpha)
+        log_alpha_optimizers.append(
+            torch.optim.Adam([log_alpha], lr=alpha_lr, betas=(0.5, 0.999))
+        )
     if agent.discrete:
         target_entropy = -math.log(1.0 / train_env.action_space.n) * 0.98
     else:
@@ -290,7 +299,7 @@ def uafbc(
                 target_agent=target_agent,
                 critic_optimizer=critic_optimizer,
                 encoder_optimizer=encoder_optimizer,
-                log_alpha=log_alpha,
+                log_alphas=log_alphas,
                 batch_size=batch_size,
                 gamma=gamma,
                 critic_clip=critic_clip,
@@ -343,7 +352,7 @@ def uafbc(
                         agent=agent,
                         pop=pop,
                         optimizer=online_actor_optimizer,
-                        log_alpha=log_alpha,
+                        log_alphas=log_alphas,
                         batch_size=batch_size,
                         aug_mix=aug_mix,
                         clip=actor_clip,
@@ -360,9 +369,9 @@ def uafbc(
                 learning.alpha_update(
                     buffer=buffer,
                     agent=agent,
-                    optimizer=log_alpha_optimizer,
+                    optimizers=log_alpha_optimizers,
                     batch_size=batch_size,
-                    log_alpha=log_alpha,
+                    log_alphas=log_alphas,
                     augmenter=augmenter,
                     aug_mix=aug_mix,
                     target_entropy=target_entropy,
