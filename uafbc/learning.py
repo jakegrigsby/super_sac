@@ -42,10 +42,10 @@ def critic_update(
     critic_loss = 0.0
     for i in range(agent.ensemble_size):
         replay_dict = lu.sample_move_and_augment(
-            buffer,
-            batch_size,
-            augmenter,
-            aug_mix,
+            buffer=buffer,
+            batch_size=batch_size,
+            augmenter=augmenter,
+            aug_mix=aug_mix,
             per=per,
         )
 

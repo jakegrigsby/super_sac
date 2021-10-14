@@ -19,7 +19,9 @@ class Critic(nn.Module):
 
     def forward(self, *args, subset=None, return_min=True):
         if subset is not None:
-            assert subset > 0
+            # compute q vals from a random subset of the networks
+            # (used in redq temporal difference target step)
+            assert subset > 0 and subset <= self.num_critics
             # can't directly sample ModuleList
             ensemble = [
                 self.nets[i] for i in random.sample(range(self.num_critics), k=subset)
@@ -96,19 +98,19 @@ class Agent:
         # create adv estimator
         if discrete:
             self.adv_estimator = adv_estimator.AdvantageEstimator(
-                self.encoder,
-                self.actors,
-                self.critics,
-                self.popart,
+                encoder=self.encoder,
+                actors=self.actors,
+                critics=self.critics,
+                popart=self.popart,
                 discrete=True,
                 discrete_method=adv_method if adv_method else "indirect",
             )
         else:
             self.adv_estimator = adv_estimator.AdvantageEstimator(
-                self.encoder,
-                self.actors,
-                self.critics,
-                self.popart,
+                encoder=self.encoder,
+                actors=self.actors,
+                critics=self.critics,
+                popart=self.popart,
                 discrete=False,
                 continuous_method=adv_method if adv_method else "mean",
             )
