@@ -1,4 +1,5 @@
 import random
+import contextlib
 
 import numpy as np
 import torch
@@ -165,7 +166,13 @@ def compute_filter_stats(
 
 
 def filtered_bc_loss(
-    logs, replay_dict, agent, ensemble_idx, filter_=True, discrete=False
+    logs,
+    replay_dict,
+    agent,
+    ensemble_idx,
+    filter_=True,
+    discrete=False,
+    need_critic_grad=True,
 ):
     o, a, *_ = replay_dict["primary_batch"]
     if filter_:
@@ -174,7 +181,8 @@ def filtered_bc_loss(
             # binary filter
             mask = (adv >= 0.0).float()
             adv_weights = mask
-    s_rep = agent.encoder(o)
+    with contextlib.nullcontext() if need_critic_grad else torch.no_grad():
+        s_rep = agent.encoder(o)
     dist = agent.actors[ensemble_idx](s_rep)
     if discrete:
         logp_a = dist.log_prob(a.squeeze(1)).unsqueeze(1)

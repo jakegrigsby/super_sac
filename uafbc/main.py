@@ -208,8 +208,8 @@ def uafbc(
     ###################
     ## TRAINING LOOP ##
     ###################
-    total_steps = num_steps_offline + num_steps_online
-    progress_bar = lambda x: tqdm.tqdm(range(x)) if verbosity else range(x)
+    total_steps = bc_warmup_steps + num_steps_offline + num_steps_online
+    progress_bar = lambda *x: tqdm.tqdm(range(*x)) if verbosity else range(x)
 
     if random_warmup_steps:
         lu.warmup_buffer(
@@ -220,57 +220,47 @@ def uafbc(
             num_envs=num_envs,
         )
 
-    # behavioral cloning
-    for step in progress_bar(bc_warmup_steps):
-        bc_logs = learning.offline_actor_update(
-            buffer=buffer,
-            agent=agent,
-            actor_optimizer=offline_actor_optimizer,
-            actor_clip=actor_clip,
-            encoder_optimizer=encoder_actorloss_optimizer,
-            encoder_clip=encoder_clip,
-            batch_size=batch_size,
-            augmenter=augmenter,
-            actor_lambda=actor_lambda,
-            aug_mix=aug_mix,
-            per=False,
-            discrete=agent.discrete,
-            filter_=False,
-        )
-
-        if (step % log_interval == 0) and log_to_disk:
-            for key, val in bc_logs.items():
-                writer.add_scalar(key, val, step)
-
-        if (
-            (step % eval_interval == 0) or (step == total_steps - 1)
-        ) and eval_interval > 0:
-            mean_return = evaluation.evaluate_agent(
-                agent,
-                test_env,
-                eval_episodes,
-                max_episode_steps,
-                render,
-                num_envs=num_eval_envs,
-                verbosity=verbosity,
-            )
-            if log_to_disk:
-                writer.add_scalar("return", mean_return, step)
-        if step % save_interval == 0 and save_to_disk:
-            agent.save(save_dir)
-
-    # create target networks (after behavioral cloning)
-    target_agent = copy.deepcopy(agent)
-    target_agent.to(device)
-    for target_critic, agent_critic in zip(target_agent.critics, agent.critics):
-        lu.hard_update(target_critic, agent_critic)
-    lu.hard_update(target_agent.encoder, agent.encoder)
-    target_agent.train()
-
-    qprint("\tRegular Training Begins...")
     done = True
     for step in progress_bar(total_steps):
-        if step > num_steps_offline:
+        bc_logs, actor_logs, critic_logs = {}, {}, {}
+        if step < bc_warmup_steps:
+            if step == 0:
+                qprint("[Behavioral Cloning]")
+            bc_logs.update(
+                learning.offline_actor_update(
+                    buffer=buffer,
+                    agent=agent,
+                    actor_optimizer=offline_actor_optimizer,
+                    actor_clip=actor_clip,
+                    encoder_optimizer=encoder_actorloss_optimizer,
+                    encoder_clip=encoder_clip,
+                    update_encoder=True,
+                    batch_size=batch_size,
+                    augmenter=augmenter,
+                    actor_lambda=actor_lambda,
+                    aug_mix=aug_mix,
+                    per=False,
+                    discrete=agent.discrete,
+                    filter_=False,
+                )
+            )
+            bc_logs.update({"schedule/bc_actor_update": 1.0})
+        else:
+            bc_logs.update({"schedule/bc_actor_update": 0.0})
+
+        if step == bc_warmup_steps:
+            qprint("[Creating Target Networks]")
+            # create target networks (after behavioral cloning)
+            target_agent = copy.deepcopy(agent)
+            target_agent.to(device)
+            for target_critic, agent_critic in zip(target_agent.critics, agent.critics):
+                lu.hard_update(target_critic, agent_critic)
+            lu.hard_update(target_agent.encoder, agent.encoder)
+            target_agent.train()
+
+        if step > bc_warmup_steps + num_steps_offline:
+            if step == bc_warmup_steps + num_steps_offline + 1:
+                qprint("[Collecting Experience For the First Time]")
             # collect experience
             for _ in range(transitions_per_online_step):
                 if done:
@@ -302,50 +292,68 @@ def uafbc(
                 if steps_this_ep >= max_episode_steps:
                     done = True
 
-        for critic_update in range(critic_updates_per_step):
-            critic_logs = learning.critic_update(
-                buffer=buffer,
-                agent=agent,
-                target_agent=target_agent,
-                critic_optimizer=critic_optimizer,
-                encoder_optimizer=encoder_criticloss_optimizer,
-                log_alphas=log_alphas,
-                batch_size=batch_size,
-                gamma=gamma,
-                critic_clip=critic_clip,
-                encoder_clip=encoder_clip,
-                target_critic_ensemble_n=target_critic_ensemble_n,
-                weighted_bellman_temp=weighted_bellman_temp,
-                weight_type=weight_type,
-                pop=pop,
-                augmenter=augmenter,
-                encoder_lambda=encoder_lambda,
-                aug_mix=aug_mix,
-                discrete=agent.discrete,
-                per=False,
-                update_priorities=step < num_steps_offline or use_bc_update_online,
-            )
+        if step > bc_warmup_steps:
+            if step == bc_warmup_steps + 1:
+                qprint("[First Critic Update]")
+            for critic_update in range(critic_updates_per_step):
+                critic_logs.update(
+                    learning.critic_update(
+                        buffer=buffer,
+                        agent=agent,
+                        target_agent=target_agent,
+                        critic_optimizer=critic_optimizer,
+                        encoder_optimizer=encoder_criticloss_optimizer,
+                        log_alphas=log_alphas,
+                        batch_size=batch_size,
+                        gamma=gamma,
+                        critic_clip=critic_clip,
+                        encoder_clip=encoder_clip,
+                        target_critic_ensemble_n=target_critic_ensemble_n,
+                        weighted_bellman_temp=weighted_bellman_temp,
+                        weight_type=weight_type,
+                        pop=pop,
+                        augmenter=augmenter,
+                        encoder_lambda=encoder_lambda,
+                        aug_mix=aug_mix,
+                        discrete=agent.discrete,
+                        per=False,
+                        update_priorities=step < num_steps_offline
+                        or use_bc_update_online,
+                    )
+                )
 
-            # move target model towards training model
-            if critic_update % target_delay == 0:
-                for agent_critic, target_critic in zip(
-                    agent.critics, target_agent.critics
-                ):
-                    lu.soft_update(target_critic, agent_critic, mlp_tau)
-                lu.soft_update(target_agent.encoder, agent.encoder, encoder_tau)
+                # move target model towards training model
+                if critic_update % target_delay == 0:
+                    for agent_critic, target_critic in zip(
+                        agent.critics, target_agent.critics
+                    ):
+                        lu.soft_update(target_critic, agent_critic, mlp_tau)
+                    lu.soft_update(target_agent.encoder, agent.encoder, encoder_tau)
+            critic_logs.update({"schedule/critic_update": 1.0})
+        else:
+            critic_logs.update({"schedule/critic_update": 0.0})
 
         # actor update
-        actor_logs = {}
-        for actor_update in range(offline_actor_updates_per_step):
-            if step < num_steps_offline or use_bc_update_online:
+        if (
+            step > bc_warmup_steps
+            and step < bc_warmup_steps + num_steps_offline
+            or step >= bc_warmup_steps + num_steps_offline
+            and use_bc_update_online
+        ):
+            if step == bc_warmup_steps + 1:
+                qprint("[First Offline Actor Update]")
+            if step == num_steps_offline:
+                qprint("[First Online Filtered BC Update]")
+            for actor_update in range(offline_actor_updates_per_step):
                 actor_logs.update(
                     learning.offline_actor_update(
                         buffer=buffer,
                         agent=agent,
                         actor_optimizer=offline_actor_optimizer,
                         # train encoder with critic grads only
-                        encoder_optimizer=None,
-                        encoder_clip=None,
+                        encoder_optimizer=encoder_actorloss_optimizer,
+                        encoder_clip=encoder_clip,
+                        update_encoder=False,
                         batch_size=batch_size,
                         actor_clip=actor_clip,
                         augmenter=augmenter,
@@ -356,9 +364,14 @@ def uafbc(
                         filter_=True,
                     )
                 )
+            actor_logs.update({"schedule/offline_actor_update": 1.0})
+        else:
+            actor_logs.update({"schedule/offline_actor_update": 0.0})
 
-        for actor_update in range(online_actor_updates_per_step):
-            if step >= num_steps_offline and use_pg_update_online:
+        if step > bc_warmup_steps + num_steps_offline and use_pg_update_online:
+            if step == bc_warmup_steps + num_steps_offline + 1:
+                qprint("[First Online Actor Update]")
+            for actor_update in range(online_actor_updates_per_step):
                 actor_logs.update(
                     learning.online_actor_update(
                         buffer=buffer,
@@ -376,8 +389,17 @@ def uafbc(
                         use_baseline=False,
                     )
                 )
+            actor_logs.update({"schedule/online_actor_update": 1.0})
+        else:
+            actor_logs.update({"schedule/online_actor_update": 0.0})
 
-        if init_alpha > 0 and alpha_lr > 0 and (step >= num_steps_offline):
+        if (
+            step > bc_warmup_steps + num_steps_offline
+            and init_alpha > 0
+            and alpha_lr > 0
+        ):
+            if step == bc_warmup_steps + num_steps_offline + 1:
+                qprint("[First Alpha Update]")
             actor_logs.update(
                 learning.alpha_update(
                     buffer=buffer,
@@ -391,6 +413,9 @@ def uafbc(
                     discrete=agent.discrete,
                 )
             )
+            actor_logs.update({"schedule/alpha_update": 1.0})
+        else:
+            actor_logs.update({"schedule/alpha_update": 0.0})
 
         #############
         ## LOGGING ##
@@ -399,6 +424,8 @@ def uafbc(
             for key, val in critic_logs.items():
                 writer.add_scalar(key, val, step)
             for key, val in actor_logs.items():
+                writer.add_scalar(key, val, step)
+            for key, val in bc_logs.items():
                 writer.add_scalar(key, val, step)
 
         if (
