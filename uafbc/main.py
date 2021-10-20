@@ -324,7 +324,7 @@ def uafbc(
                 )
 
                 # move target model towards training model
-                if critic_update % target_delay == 0:
+                if (critic_update + step)  % target_delay == 0:
                     for agent_critic, target_critic in zip(
                         agent.critics, target_agent.critics
                     ):

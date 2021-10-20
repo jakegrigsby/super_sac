@@ -187,11 +187,11 @@ def filtered_bc_loss(
     if discrete:
         logp_a = dist.log_prob(a.squeeze(1)).unsqueeze(1)
     else:
-        logp_a = dist.log_prob(a).sum(-1, keepdim=True)
+        logp_a = dist.log_prob(a).sum(-1, keepdim=True).clamp(-100., 100.)
     if filter_:
         logs[f"losses/adv_weights_mean"] = adv_weights.mean().item()
         logp_a *= adv_weights
-    loss = -(logp_a.clamp(-100.0, 100.0)).mean()
+    loss = -(logp_a).mean()
     logs[f"losses/filterd_bc_loss_{ensemble_idx}"] = loss.item()
     return loss
 

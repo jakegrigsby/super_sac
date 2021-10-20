@@ -186,8 +186,6 @@ def offline_actor_update(
     logs["gradients/actor_offline_grad_norm"] = lu.get_grad_norm(
         random.choice(agent.actors)
     )
-    print(lu.get_grad_norm(agent.actors[0]))
-    input()
     logs["gradients/encoder_offline_actorloss_grad_norm"] = lu.get_grad_norm(
         agent.encoder
     )
