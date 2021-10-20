@@ -65,7 +65,7 @@ class TanhTransform(pyd.transforms.Transform):
         return x.tanh()
 
     def _inverse(self, y):
-        return self.atanh(y.clamp(-0.99, 0.99))
+        return self.atanh(y.clamp(-.99, .99))
 
     def log_abs_det_jacobian(self, x, y):
         return 2.0 * (math.log(2.0) - x - F.softplus(-2.0 * x))

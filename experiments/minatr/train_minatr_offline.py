@@ -30,7 +30,7 @@ def train_minatar_offline(args):
         num_critics=2,
         ensemble_size=args.ensemble_size,
         ucb_bonus=0.0,
-        auto_rescale_targets=True,
+        auto_rescale_targets=False,
         beta_dist=False,
     )
 
@@ -72,7 +72,8 @@ def train_minatar_offline(args):
         random_warmup_steps=0,
         max_episode_steps=100_000,
         actor_lr=5e-4,
-        pop=True,
+        critic_lr=5e-4,
+        pop=False,
         weighted_bellman_temp=None,
         weight_type=None,
         init_alpha=0,
@@ -80,6 +81,7 @@ def train_minatar_offline(args):
         target_entropy_mul=0.5,
         eval_interval=5000,
         log_interval=50,
+        afbc_per=False,
         render=args.render,
     )
 
