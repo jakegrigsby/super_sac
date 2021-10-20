@@ -37,7 +37,7 @@ def train_d4rl_gym(args):
         discrete=False,
         ensemble_size=args.ensemble_size,
         num_critics=args.num_critics,
-        auto_rescale_targets=False,
+        auto_rescale_targets=args.popart,
     )
 
     # get offline datset
@@ -66,7 +66,7 @@ def train_d4rl_gym(args):
         weight_type=None,
         bc_warmup_steps=0,
         name=args.name,
-        pop=False,
+        pop=args.popart,
         init_alpha=0,
         alpha_lr=0,
     )
@@ -79,5 +79,6 @@ if __name__ == "__main__":
     parser.add_argument("--num_critics", type=int, default=2)
     parser.add_argument("--ensemble_size", type=int, default=1)
     parser.add_argument("--steps", type=int, default=500_000)
+    parser.add_argument("--popart", action="store_true")
     args = parser.parse_args()
     train_d4rl_gym(args)
