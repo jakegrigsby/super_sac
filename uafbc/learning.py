@@ -121,9 +121,11 @@ def critic_update(
 def offline_actor_update(
     buffer,
     agent,
-    optimizer,
+    actor_optimizer,
+    encoder_optimizer,
     batch_size,
-    clip,
+    actor_clip,
+    encoder_clip,
     augmenter,
     actor_lambda,
     aug_mix,
@@ -159,14 +161,23 @@ def offline_actor_update(
                 ensemble_idx=ensemble_idx,
             )
     loss /= agent.ensemble_size
-    # take gradient step
-    optimizer.zero_grad()
+
+    actor_optimizer.zero_grad()
+    if encoder_optimizer is not None:
+        encoder_optimizer.zero_grad()
+
     loss.backward()
-    if clip:
+
+    if actor_clip:
         torch.nn.utils.clip_grad_norm_(
-            chain(*(actor.parameters() for actor in agent.actors)), clip
+            chain(*(actor.parameters() for actor in agent.actors)), actor_clip
         )
-    optimizer.step()
+    if encoder_clip and encoder_optimizer is not None:
+        torch.nn.utils.clip_grad_norm_(agent.encoder.parameters(), encoder_clip)
+
+    actor_optimizer.step()
+    if encoder_optimizer is not None:
+        encoder_optimizer.step()
 
     if per:
         lu.adjust_priorities(logs, replay_dict, agent, buffer)
@@ -174,6 +185,7 @@ def offline_actor_update(
     logs["gradients/actor_offline_grad_norm"] = lu.get_grad_norm(
         random.choice(agent.actors)
     )
+    logs["gradients/encoder_offline_grad_norm"] = lu.get_grad_norm(agent.encoder)
     return logs
 
 

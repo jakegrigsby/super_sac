@@ -174,13 +174,12 @@ def filtered_bc_loss(
             # binary filter
             mask = (adv >= 0.0).float()
             adv_weights = mask
-    with torch.no_grad():
-        s_rep = agent.encoder(o)
+    s_rep = agent.encoder(o)
     dist = agent.actors[ensemble_idx](s_rep)
     if discrete:
         logp_a = dist.log_prob(a.squeeze(1)).unsqueeze(1)
     else:
-        logp_a = dist.log_prob(a).sum(-1, keepdim=True)
+        logp_a = dist.log_prob(a.clamp(-0.999, 0.999)).sum(-1, keepdim=True)
     if filter_:
         logp_a *= adv_weights
     loss = -(logp_a.clamp(-100.0, 100.0)).mean()

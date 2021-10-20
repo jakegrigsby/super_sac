@@ -141,13 +141,6 @@ def uafbc(
     ###########
     agent.to(device)
     agent.train()
-    # create target networks
-    target_agent = copy.deepcopy(agent)
-    target_agent.to(device)
-    for target_critic, agent_critic in zip(target_agent.critics, agent.critics):
-        lu.hard_update(target_critic, agent_critic)
-    lu.hard_update(target_agent.encoder, agent.encoder)
-    target_agent.train()
 
     critic_optimizer = torch.optim.Adam(
         chain(*(critic.parameters() for critic in agent.critics)),
@@ -161,13 +154,19 @@ def uafbc(
         weight_decay=actor_l2,
         betas=(0.9, 0.999),
     )
+    encoder_actorloss_optimizer = torch.optim.Adam(
+        agent.encoder.parameters(),
+        lr=encoder_lr,
+        weight_decay=actor_l2,
+        betas=(0.9, 0.999),
+    )
     online_actor_optimizer = torch.optim.Adam(
         chain(*(actor.parameters() for actor in agent.actors)),
         lr=actor_lr,
         weight_decay=actor_l2,
         betas=(0.9, 0.999),
     )
-    encoder_optimizer = torch.optim.Adam(
+    encoder_criticloss_optimizer = torch.optim.Adam(
         agent.encoder.parameters(),
         lr=encoder_lr,
         weight_decay=encoder_l2,
@@ -226,9 +225,11 @@ def uafbc(
         bc_logs = learning.offline_actor_update(
             buffer=buffer,
             agent=agent,
-            optimizer=offline_actor_optimizer,
+            actor_optimizer=offline_actor_optimizer,
+            actor_clip=actor_clip,
+            encoder_optimizer=encoder_actorloss_optimizer,
+            encoder_clip=encoder_clip,
             batch_size=batch_size,
-            clip=actor_clip,
             augmenter=augmenter,
             actor_lambda=actor_lambda,
             aug_mix=aug_mix,
@@ -251,11 +252,20 @@ def uafbc(
                 max_episode_steps,
                 render,
                 num_envs=num_eval_envs,
+                verbosity=verbosity,
             )
             if log_to_disk:
                 writer.add_scalar("return", mean_return, step)
         if step % save_interval == 0 and save_to_disk:
             agent.save(save_dir)
+
+    # create target networks (after behavioral cloning)
+    target_agent = copy.deepcopy(agent)
+    target_agent.to(device)
+    for target_critic, agent_critic in zip(target_agent.critics, agent.critics):
+        lu.hard_update(target_critic, agent_critic)
+    lu.hard_update(target_agent.encoder, agent.encoder)
+    target_agent.train()
 
     qprint("\tRegular Training Begins...")
     done = True
@@ -298,7 +308,7 @@ def uafbc(
                 agent=agent,
                 target_agent=target_agent,
                 critic_optimizer=critic_optimizer,
-                encoder_optimizer=encoder_optimizer,
+                encoder_optimizer=encoder_criticloss_optimizer,
                 log_alphas=log_alphas,
                 batch_size=batch_size,
                 gamma=gamma,
@@ -332,9 +342,12 @@ def uafbc(
                     learning.offline_actor_update(
                         buffer=buffer,
                         agent=agent,
-                        optimizer=offline_actor_optimizer,
+                        actor_optimizer=offline_actor_optimizer,
+                        # train encoder with critic grads only
+                        encoder_optimizer=None,
+                        encoder_clip=None,
                         batch_size=batch_size,
-                        clip=actor_clip,
+                        actor_clip=actor_clip,
                         augmenter=augmenter,
                         actor_lambda=actor_lambda,
                         aug_mix=aug_mix,
