@@ -189,6 +189,7 @@ def filtered_bc_loss(
     else:
         logp_a = dist.log_prob(a.clamp(-0.999, 0.999)).sum(-1, keepdim=True)
     if filter_:
+        logs[f"losses/adv_weights_mean"] = adv_weights.mean().item()
         logp_a *= adv_weights
     loss = -(logp_a.clamp(-100.0, 100.0)).mean()
     logs[f"losses/filterd_bc_loss_{ensemble_idx}"] = loss.item()

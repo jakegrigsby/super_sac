@@ -60,6 +60,7 @@ def uafbc(
     bc_warmup_steps=0,
     random_warmup_steps=0,
     weight_type="softmax",
+    afbc_per=True,
     # env and eval kwargs
     transitions_per_online_step=1,
     infinite_bootstrap=True,
@@ -317,7 +318,7 @@ def uafbc(
                         aug_mix=aug_mix,
                         discrete=agent.discrete,
                         per=False,
-                        update_priorities=step < num_steps_offline
+                        update_priorities=step < bc_warmup_steps + num_steps_offline
                         or use_bc_update_online,
                     )
                 )
@@ -342,7 +343,7 @@ def uafbc(
         ):
             if step == bc_warmup_steps + 1:
                 qprint("[First Offline Actor Update]")
-            if step == num_steps_offline:
+            if step == bc_warmup_steps + num_steps_offline:
                 qprint("[First Online Filtered BC Update]")
             for actor_update in range(offline_actor_updates_per_step):
                 actor_logs.update(
@@ -359,7 +360,7 @@ def uafbc(
                         augmenter=augmenter,
                         actor_lambda=actor_lambda,
                         aug_mix=aug_mix,
-                        per=True,
+                        per=afbc_per,
                         discrete=agent.discrete,
                         filter_=True,
                     )

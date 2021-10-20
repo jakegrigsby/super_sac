@@ -173,7 +173,7 @@ def offline_actor_update(
         torch.nn.utils.clip_grad_norm_(
             chain(*(actor.parameters() for actor in agent.actors)), actor_clip
         )
-    if encoder_clip and encoder_optimizer is not None:
+    if encoder_clip:
         torch.nn.utils.clip_grad_norm_(agent.encoder.parameters(), encoder_clip)
 
     actor_optimizer.step()
