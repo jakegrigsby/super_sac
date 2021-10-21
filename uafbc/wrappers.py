@@ -38,10 +38,7 @@ class NormActionSpace(gym.ActionWrapper):
         super().__init__(env)
         self._true_action_space = env.action_space
         self.action_space = gym.spaces.Box(
-            low=-1.0,
-            high=1.0,
-            shape=self._true_action_space.shape,
-            dtype=np.float32,
+            low=-1.0, high=1.0, shape=self._true_action_space.shape, dtype=np.float32,
         )
 
     def action(self, action):
@@ -165,6 +162,56 @@ class DeltaReward(gym.RewardWrapper):
         delta_rew = rew - self._old_rew
         self._old_rew = rew
         return delta_rew
+
+
+class StateStack(gym.Wrapper):
+    def __init__(self, env: gym.Env, num_stack: int, skip: int = 1):
+        gym.Wrapper.__init__(self, env)
+        self._k = num_stack
+        self._frames = deque([], maxlen=num_stack * skip)
+        shp = env.observation_space.shape[0]
+        low = np.array([env.observation_space.low for _ in range(num_stack)]).flatten()
+        high = np.array(
+            [env.observation_space.high for _ in range(num_stack)]
+        ).flatten()
+        self.observation_space = gym.spaces.Box(
+            low=low,
+            high=high,
+            shape=(shp * num_stack,),
+            dtype=env.observation_space.dtype,
+        )
+        self._skip = skip
+
+    def reset(self):
+        obs = self.env.reset()
+        for _ in range(self._k * self._skip):
+            self._frames.append(obs)
+        return self._get_obs()
+
+    def step(self, action):
+        obs, reward, done, info = self.env.step(action)
+        self._frames.append(obs)
+        return self._get_obs(), reward, done, info
+
+    def _get_obs(self):
+        assert len(self._frames) == self._k * self._skip
+        obs = np.concatenate(list(self._frames)[:: -self._skip], axis=0)
+        return obs
+
+
+class FrameSkip(gym.Wrapper):
+    def __init__(self, env, skip=0):
+        super().__init__(env)
+        self.skip = skip
+
+    def step(self, action):
+        tot_rew = 0
+        for _ in range(self.skip + 1):
+            next_state, rew, done, info = self.env.step(action)
+            tot_rew += rew
+            if done:
+                break
+        return next_state, tot_rew, done, info
 
 
 class FrameStack(gym.Wrapper):
