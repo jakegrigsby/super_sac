@@ -40,6 +40,7 @@ def train_dmc_online(args):
         auto_rescale_targets=False,
         log_std_low=-5.,
         log_std_high=2.,
+        beta_dist=args.beta_dist,
     )
 
     buffer = uafbc.replay.PrioritizedReplayBuffer(size=1_000_000)
@@ -75,5 +76,6 @@ if __name__ == "__main__":
     parser.add_argument("--name", type=str, default="uafbc_dmc")
     parser.add_argument("--ensemble_size", type=int, default=1)
     parser.add_argument("--num_critics", type=int, default=2)
+    parser.add_argument("--beta_dist", action="store_true")
     args = parser.parse_args()
     train_dmc_online(args)
