@@ -14,6 +14,7 @@ from skimage.transform import resize
 from skimage.util.shape import view_as_windows
 from torch import nn
 from torchvision import transforms
+import torch.nn.functional as F
 
 
 class AugmentationSequence:
@@ -195,6 +196,56 @@ class DrqAug:
     def print_params(self):
         print(self.w1)
         print(self.h1)
+
+
+class Drqv2Aug:
+    def __init__(self, batch_size, pad=4, noise=True, *_args, **kwargs):
+        self.batch_size = batch_size
+        self.pad = pad
+        self.change_randomization_params()
+        self.noise = noise
+
+    def change_randomization_params(self):
+        self.shift = torch.randint(
+            0,
+            2 * self.pad + 1,
+            size=(self.batch_size, 1, 1, 2),
+        )
+
+    def random_crop(self, imgs):
+        (
+            n,
+            c,
+            h,
+            w,
+        ) = imgs.size()
+        assert h == w
+        assert n == self.batch_size
+        padding = tuple([self.pad] * 4)
+        imgs = F.pad(imgs, padding, "replicate")
+        eps = 1.0 / (h + 2 * self.pad)
+        arange = torch.linspace(
+            -1.0 + eps,
+            1.0 - eps,
+            h + 2 * self.pad,
+            device=imgs.device,
+            dtype=imgs.dtype,
+        )[:h]
+        arange = arange.unsqueeze(0).repeat(h, 1).unsqueeze(2)
+        base_grid = torch.cat([arange, arange.transpose(1, 0)], dim=2)
+        base_grid = base_grid.unsqueeze(0).repeat(n, 1, 1, 1)
+        shift = self.shift.to(imgs.device).float() * (2.0 / (h + 2 * self.pad))
+        grid = base_grid + shift
+        return F.grid_sample(imgs, grid, padding_mode="zeros", align_corners=False)
+
+    def __call__(self, imgs):
+        cropped = self.random_crop(imgs)
+        if self.noise:
+            cropped += torch.randn_like(cropped)
+        return cropped.clamp(0, 255.0)
+
+    def print_params(self):
+        pass
 
 
 class DrqNoNoiseAug(DrqAug):

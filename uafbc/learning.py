@@ -32,6 +32,7 @@ def critic_update(
     pop,
     augmenter,
     encoder_lambda,
+    random_process,
     aug_mix=0.75,
     discrete=False,
     per=False,
@@ -59,6 +60,7 @@ def critic_update(
             ensemble_n=target_critic_ensemble_n,
             pop=pop,
             gamma=gamma,
+            random_process=random_process,
             discrete=discrete,
         )
 
@@ -243,6 +245,7 @@ def online_actor_update(
     log_alphas,
     batch_size,
     clip,
+    random_process,
     augmenter,
     aug_mix,
     per=False,
@@ -278,6 +281,8 @@ def online_actor_update(
             entropy_bonus = log_alpha.exp() * (probs * log_probs).sum(1, keepdim=True)
         else:
             a = a_dist.rsample()
+            if random_process is not None:
+                a = random_process.sample(a, update_schedule=False)
             if not use_baseline:
                 vals = critic(s_rep, a)
                 if popart and pop:

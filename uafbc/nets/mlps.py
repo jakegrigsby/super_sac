@@ -46,18 +46,20 @@ class ContinuousStochasticActor(nn.Module):
         return dist
 
 
-class ContinuousDeterminisitcActor(nn.Module):
-    def __init__(self, state_size, action_size, hidden_size=256):
+class ContinuousDeterministicActor(nn.Module):
+    def __init__(self, state_size, action_size, hidden_size=256, **kwargs):
         super().__init__()
         self.fc1 = nn.Linear(state_size, hidden_size)
         self.fc2 = nn.Linear(hidden_size, hidden_size)
         self.out = nn.Linear(hidden_size, action_size)
+        self.dist_impl = "deterministic"
 
     def forward(self, state):
         x = F.relu(self.fc1(state))
         x = F.relu(self.fc2(x))
         act = torch.tanh(self.out(x))
-        return act
+        dist = distributions.ContinuousDeterministic(act)
+        return dist
 
 
 class ContinuousCritic(nn.Module):

@@ -206,6 +206,9 @@ def uafbc(
                 final_scale=exploration_param_final,
                 steps_annealed=exploration_param_anneal,
             )
+    else:
+        random_process = None
+
     ###################
     ## TRAINING LOOP ##
     ###################
@@ -272,7 +275,8 @@ def uafbc(
                     state, from_cpu=True, num_envs=num_envs, return_dist=True
                 )
                 if use_exploration_process:
-                    action = random_process.sample(action)
+                    actor_logs["exploration_noise_param"] = random_process.current_scale
+                    action = random_process.sample(action, update_schedule=True)
                 next_state, reward, done, info = train_env.step(action)
                 if ignore_all_dones or (
                     infinite_bootstrap and steps_this_ep + 1 == max_episode_steps
@@ -317,6 +321,7 @@ def uafbc(
                         encoder_lambda=encoder_lambda,
                         aug_mix=aug_mix,
                         discrete=agent.discrete,
+                        random_process=random_process,
                         per=False,
                         update_priorities=step < bc_warmup_steps + num_steps_offline
                         or use_bc_update_online,
@@ -383,6 +388,7 @@ def uafbc(
                         augmenter=augmenter,
                         per=False,
                         discrete=agent.discrete,
+                        random_process=random_process,
                         # use_baseline=True,
                         use_baseline=False,
                     )

@@ -65,18 +65,17 @@ class ReplayBufferStorage:
             raise IndexError(
                 "DictBufferStorage getitem called with indices object that is not iterable"
             )
-        # converting states and actions to float here instead of inside the learning loop
-        # of each agent seems fine for now.
         state = {}
         next_state = {}
+
         for label in self.s_stack.keys():
-            state[label] = torch.from_numpy(self.s_stack[label][indices]).float()
-            next_state[label] = torch.from_numpy(self.s1_stack[label][indices]).float()
-        action = torch.from_numpy(self.action_stack[indices]).float()
+            state[label] = torch.from_numpy(self.s_stack[label][indices])
+            next_state[label] = torch.from_numpy(self.s1_stack[label][indices])
+        action = torch.from_numpy(self.action_stack[indices])
         if action.dim() < 2:
             action = action.unsqueeze(1)
-        reward = torch.from_numpy(self.reward_stack[indices]).float()
-        done = torch.from_numpy(self.done_stack[indices]).float()
+        reward = torch.from_numpy(self.reward_stack[indices])
+        done = torch.from_numpy(self.done_stack[indices])
         return (state, action, reward, next_state, done)
 
     def get_all_transitions(self):
