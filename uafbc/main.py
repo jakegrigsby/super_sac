@@ -324,7 +324,7 @@ def uafbc(
                 )
 
                 # move target model towards training model
-                if (critic_update + step)  % target_delay == 0:
+                if (critic_update + step) % target_delay == 0:
                     for agent_critic, target_critic in zip(
                         agent.critics, target_agent.critics
                     ):
@@ -335,11 +335,8 @@ def uafbc(
             critic_logs.update({"schedule/critic_update": 0.0})
 
         # actor update
-        if (
-            step > bc_warmup_steps
-            and step < bc_warmup_steps + num_steps_offline
-            or step >= bc_warmup_steps + num_steps_offline
-            and use_bc_update_online
+        if (step > bc_warmup_steps and step < bc_warmup_steps + num_steps_offline) or (
+            step >= bc_warmup_steps + num_steps_offline and use_bc_update_online
         ):
             if step == bc_warmup_steps + 1:
                 qprint("[First Offline Actor Update]")
