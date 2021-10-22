@@ -8,7 +8,6 @@ import dmc_remastered as dmcr
 import gym
 
 import uafbc
-from uafbc.wrappers import SimpleGymWrapper
 from uafbc import nets
 from uafbc.augmentations import AugmentationSequence, Drqv2Aug, DrqAug
 
@@ -27,12 +26,16 @@ class DMCREncoder(nets.Encoder):
     def embedding_dim(self):
         return self._dim
 
+
 class Uint8Image(gym.ObservationWrapper):
     def observation(self, obs):
-        return {"obs":obs.astype(np.uint8)}
+        return {"obs": obs.astype(np.uint8)}
+
 
 def train_dmcr_drqv2(args):
-    train_env, test_env = dmcr.benchmarks.classic(args.domain, args.task, visual_seed=args.seed)
+    train_env, test_env = dmcr.benchmarks.classic(
+        args.domain, args.task, visual_seed=args.seed
+    )
     train_env = Uint8Image(train_env)
     test_env = Uint8Image(test_env)
 
@@ -43,16 +46,15 @@ def train_dmcr_drqv2(args):
         # deterministic actor with exploration noise
         actor_network_cls=uafbc.nets.mlps.ContinuousDeterministicActor,
         critic_network_cls=uafbc.nets.mlps.ContinuousCritic,
-        ensemble_size=1,
-        num_critics=2,
+        ensemble_size=args.ensemble_size,
+        num_critics=args.critics,
         hidden_size=1024,
         discrete=False,
         auto_rescale_targets=False,
         beta_dist=False,
     )
 
-    buffer = uafbc.replay.PrioritizedReplayBuffer(size=100_000)
-
+    buffer = uafbc.replay.PrioritizedReplayBuffer(size=1_000_000)
 
     # run training
     uafbc.uafbc(
@@ -68,8 +70,8 @@ def train_dmcr_drqv2(args):
         encoder_lr=1e-4,
         # drqv2 does not use target encoders.
         # encoder_tau=1 has the same effect.
-        encoder_tau=1.,
-        mlp_tau=.01,
+        encoder_tau=1.0,
+        mlp_tau=0.01,
         target_delay=1,
         batch_size=256,
         # no automatic entropy
@@ -77,8 +79,8 @@ def train_dmcr_drqv2(args):
         alpha_lr=0,
         # exploration noise, also used in updates
         use_exploration_process=True,
-        weighted_bellman_temp=None,
-        weight_type=None,
+        weighted_bellman_temp=1.0,
+        weight_type="softmax",
         use_bc_update_online=False,
         # "upate delay = 2"
         transitions_per_online_step=2,
@@ -86,10 +88,11 @@ def train_dmcr_drqv2(args):
         num_steps_online=args.steps,
         random_warmup_steps=6_000,
         max_episode_steps=1000,
-        eval_interval=2000,
+        eval_interval=5000,
         eval_episodes=10,
+        log_interval=500,
         pop=False,
-        augmenter=AugmentationSequence([Drqv2Aug(256)])
+        augmenter=AugmentationSequence([Drqv2Aug(256)]),
     )
 
 
@@ -100,5 +103,7 @@ if __name__ == "__main__":
     parser.add_argument("--name", type=str, default="uafbc_dmcr_run")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--steps", type=int, default=1_000_000)
+    parser.add_argument("--ensemble_size", type=int, default=1)
+    parser.add_argument("--critics", type=int, default=2)
     args = parser.parse_args()
     train_dmcr_drqv2(args)
