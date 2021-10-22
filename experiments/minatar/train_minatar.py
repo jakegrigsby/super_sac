@@ -7,7 +7,7 @@ from torch import nn
 import torch.nn.functional as F
 
 import uafbc
-from uafbc.wrappers import ParallelActors, DiscreteActionWrapper, SimpleGymWrapper
+from uafbc.wrappers import ParallelActors, DiscreteActionWrapper, Uint8Wrapper
 import gym
 from minatar_utils import MinAtarEnv, MinAtarEncoder
 
@@ -16,8 +16,8 @@ def train_minatar(args):
     def make_env():
         return DiscreteActionWrapper(MinAtarEnv(args.game))
 
-    train_env = SimpleGymWrapper(ParallelActors(make_env, args.parallel_train_envs))
-    test_env = SimpleGymWrapper(ParallelActors(make_env, args.parallel_eval_envs))
+    train_env = Uint8Wrapper(ParallelActors(make_env, args.parallel_train_envs))
+    test_env = Uint8Wrapper(ParallelActors(make_env, args.parallel_eval_envs))
 
     # create agent
     agent = uafbc.Agent(
@@ -59,7 +59,6 @@ def train_minatar(args):
     else:
         buffer = uafbc.replay.PrioritizedReplayBuffer(size=1_000_000)
 
-
     # run training
     uafbc.uafbc(
         agent=agent,
@@ -87,6 +86,8 @@ def train_minatar(args):
         log_interval=50,
         afbc_per=False,
         render=args.render,
+        logging_method=args.logging_method,
+        batch_size=args.batch_size,
     )
 
 
@@ -101,6 +102,13 @@ if __name__ == "__main__":
     parser.add_argument("--dset", type=str, default=None)
     parser.add_argument("--bc_steps", type=int, default=0)
     parser.add_argument("--offline_steps", type=int, default=0)
+    parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--online_steps", type=int, default=1_000_000)
+    parser.add_argument(
+        "--logging_method",
+        type=str,
+        default="tensorboard",
+        choices=["tensorboard", "wandb"],
+    )
     args = parser.parse_args()
     train_minatar(args)

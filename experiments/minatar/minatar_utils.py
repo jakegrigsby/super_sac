@@ -19,11 +19,11 @@ class MinAtarEnv(gym.Wrapper):
 
     def reset(self):
         self.env.reset()
-        return self.env.state().astype(np.uint8)
+        return self.env.state().astype(np.uint8).transpose(2, 0, 1)
 
     def step(self, act):
         reward, done = self.env.act(act)
-        state = self.env.state().astype(np.uint8)
+        state = self.env.state().astype(np.uint8).transpose(2, 0, 1)
         return state, reward, done, {}
 
     @property
@@ -55,7 +55,7 @@ class MinAtarEncoder(nets.Encoder):
         return self._dim
 
     def forward(self, obs_dict):
-        img = obs_dict["obs"].permute(0, 3, 1, 2).contiguous()
+        img = obs_dict["obs"]
         x = F.relu(self.conv1(img))
         x = F.relu(self.conv2(x))
         x = x.view(x.size(0), -1)

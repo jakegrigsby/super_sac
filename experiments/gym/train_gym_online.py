@@ -103,6 +103,7 @@ def train_gym_online(args):
         init_alpha=0.1,
         alpha_lr=1e-4,
         render=args.render,
+        logging_method=args.logging_method,
     )
 
 
@@ -124,5 +125,11 @@ if __name__ == "__main__":
     parser.add_argument("--use_exploration_process", action="store_true")
     parser.add_argument("--render", action="store_true")
     parser.add_argument("--max_episode_steps", type=int, default=1000)
+    parser.add_argument(
+        "--logging_method",
+        type=str,
+        default="tensorboard",
+        choices=["tensorboard", "wandb"],
+    )
     args = parser.parse_args()
     train_gym_online(args)

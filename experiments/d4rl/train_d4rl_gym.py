@@ -69,6 +69,7 @@ def train_d4rl_gym(args):
         pop=args.popart,
         init_alpha=0,
         alpha_lr=0,
+        logging_method=args.logging_method,
     )
 
 
@@ -80,5 +81,11 @@ if __name__ == "__main__":
     parser.add_argument("--ensemble_size", type=int, default=1)
     parser.add_argument("--steps", type=int, default=500_000)
     parser.add_argument("--popart", action="store_true")
+    parser.add_argument(
+        "--logging_method",
+        type=str,
+        default="tensorboard",
+        choices=["tensorboard", "wandb"],
+    )
     args = parser.parse_args()
     train_d4rl_gym(args)

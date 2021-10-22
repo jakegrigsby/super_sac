@@ -7,7 +7,7 @@ import torch.nn.functional as F
 
 import uafbc
 from uafbc import nets
-from uafbc.augmentations import AugmentationSequence, DrqAug
+from uafbc.augmentations import AugmentationSequence, Drqv2Aug
 
 
 class AtariEncoder(nets.Encoder):
@@ -28,10 +28,10 @@ def train_atari(args):
     def make_env():
         return uafbc.wrappers.load_atari(args.game, frame_skip=4)
 
-    train_env = uafbc.wrappers.SimpleGymWrapper(
+    train_env = uafbc.wrappers.Uint8Wrapper(
         uafbc.wrappers.ParallelActors(make_env, args.actors)
     )
-    test_env = uafbc.wrappers.SimpleGymWrapper(make_env())
+    test_env = uafbc.wrappers.Uint8Wrapper(make_env())
 
     # create agent
     img_shape = train_env.observation_space.shape
@@ -47,7 +47,7 @@ def train_atari(args):
         auto_rescale_targets=args.popart,
     )
 
-    buffer = uafbc.replay.PrioritizedReplayBuffer(size=250_000)
+    buffer = uafbc.replay.PrioritizedReplayBuffer(size=500_000)
 
     # run training
     uafbc.uafbc(
@@ -61,7 +61,7 @@ def train_atari(args):
         use_bc_update_online=False,
         num_steps_offline=0,
         num_steps_online=args.steps,
-        random_warmup_steps=50_000,
+        random_warmup_steps=1_000,
         max_episode_steps=108_000,
         actor_clip=40.0,
         critic_clip=40.0,
@@ -72,10 +72,11 @@ def train_atari(args):
         weight_type=None,
         critic_updates_per_step=1,
         eval_episodes=10,
-        augmenter=None,
         init_alpha=0.1,
         target_entropy_mul=1.0,
         alpha_lr=1e-4,
+        logging_method=args.logging_method,
+        augmenter=AugmentationSequence([Drqv2Aug(64)]),
     )
 
 
@@ -88,5 +89,11 @@ if __name__ == "__main__":
     parser.add_argument("--steps", type=int, default=10_000_000)
     parser.add_argument("--popart", action="store_true")
     parser.add_argument("--actors", type=int, default=1)
+    parser.add_argument(
+        "--logging_method",
+        type=str,
+        default="tensorboard",
+        choices=["tensorboard", "wandb"],
+    )
     args = parser.parse_args()
     train_atari(args)

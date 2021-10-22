@@ -39,7 +39,7 @@ class DMCREncoder(nets.Encoder):
         self.conv_block = nets.cnns.BigPixelEncoder(inp_shape, emb_dim)
 
     def forward(self, obs_dict):
-        img = obs_dict["obs"].float()
+        img = obs_dict["obs"]
         return self.conv_block(img)
 
     @property
@@ -66,6 +66,7 @@ def train_dmcr_drqv2(args):
         # deterministic actor with exploration noise
         actor_network_cls=uafbc.nets.mlps.ContinuousDeterministicActor,
         critic_network_cls=uafbc.nets.mlps.ContinuousCritic,
+        ensemble_size=1,
         num_critics=2,
         hidden_size=1024,
         discrete=False,
@@ -100,7 +101,7 @@ def train_dmcr_drqv2(args):
         use_exploration_process=True,
         # control exploration noise scale schedule
         exploration_param_init=1.0,
-        exploration_param_final=.1,
+        exploration_param_final=0.1,
         exploration_param_anneal=1_000_000,
         weighted_bellman_temp=None,
         weight_type=None,
@@ -116,6 +117,7 @@ def train_dmcr_drqv2(args):
         log_interval=500,
         pop=False,
         augmenter=AugmentationSequence([Drqv2Aug(256)]),
+        logging_method=args.logging_method,
     )
 
 
@@ -126,5 +128,11 @@ if __name__ == "__main__":
     parser.add_argument("--name", type=str, default="uafbc_dmcr_run")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--steps", type=int, default=1_000_000)
+    parser.add_argument(
+        "--logging_method",
+        type=str,
+        default="tensorboard",
+        choices=["tensorboard", "wandb"],
+    )
     args = parser.parse_args()
     train_dmcr_drqv2(args)
