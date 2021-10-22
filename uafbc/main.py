@@ -75,6 +75,9 @@ def uafbc(
     actor_lambda=0.0,
     aug_mix=0.9,
     # logging, misc
+    logging_method="tensorboard",
+    wandb_entity=os.getenv("SSAC_WANDB_ACCOUNT"),
+    wandb_project=os.getenv("SSAC_WANDB_PROJECT"),
     name="afbc_run",
     log_to_disk=True,
     log_interval=5000,
@@ -97,8 +100,21 @@ def uafbc(
     if save_to_disk or log_to_disk:
         save_dir = make_process_dirs(name)
     if log_to_disk:
-        writer = tensorboardX.SummaryWriter(save_dir)
-        # writer.add_hparams(locals(), {})
+        if logging_method == "tensorboard":
+            writer = tensorboardX.SummaryWriter(save_dir)
+        elif logging_method == "wandb":
+            assert (
+                wandb_project is not None and wandb_entity is not None
+            ), "Set `wandb_entity` and `wandb_project` kwargs. Note that you can also \n\
+                set the os environment variables `SSAC_WANDB_ACCOUNT` and `SSAC_WANDB_PROJECT`, \n\
+                respectively. Super SAC will default to those values."
+            import wandb
+
+            wandb.init(
+                project=wandb_project, entity=wandb_entity, dir=save_dir, reinit=True
+            )
+            wandb.run.name = name
+            wandb.run.save()
 
     if augmenter is None:
         augmenter = augmentations.AugmentationSequence(
@@ -425,12 +441,17 @@ def uafbc(
         ## LOGGING ##
         #############
         if (step % log_interval == 0) and log_to_disk:
-            for key, val in critic_logs.items():
-                writer.add_scalar(key, val, step)
-            for key, val in actor_logs.items():
-                writer.add_scalar(key, val, step)
-            for key, val in bc_logs.items():
-                writer.add_scalar(key, val, step)
+            if logging_method == "tensorboard":
+                for key, val in critic_logs.items():
+                    writer.add_scalar(key, val, step)
+                for key, val in actor_logs.items():
+                    writer.add_scalar(key, val, step)
+                for key, val in bc_logs.items():
+                    writer.add_scalar(key, val, step)
+            elif logging_method == "wandb":
+                wandb.log(critic_logs)
+                wandb.log(actor_logs)
+                wandb.log(bc_logs)
 
         if (
             (step % eval_interval == 0) or (step == total_steps - 1)
@@ -445,9 +466,19 @@ def uafbc(
                 num_envs=num_eval_envs,
             )
             if log_to_disk:
-                writer.add_scalar("return", mean_return, step)
-                accepted_exp_pct = lu.compute_filter_stats(buffer, agent, 1024)
-                writer.add_scalar("Accepted Exp (pct)", accepted_exp_pct, step)
+                accepted_exp_pct = lu.compute_filter_stats(
+                    buffer=buffer,
+                    agent=agent,
+                    augmenter=augmenter,
+                    batch_size=batch_size,
+                )
+                if logging_method == "tensorboard":
+                    writer.add_scalar("return", mean_return, step)
+                    writer.add_scalar("Accepted Exp Pct", accepted_exp_pct, step)
+                elif logging_method == "wandb":
+                    wandb.log(
+                        {"return": mean_return, "Accepted Exp Pct": accepted_exp_pct}
+                    )
         if step % save_interval == 0 and save_to_disk:
             agent.save(save_dir)
 

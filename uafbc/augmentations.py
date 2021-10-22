@@ -203,6 +203,7 @@ class Drqv2Aug:
     Faster version of the DrqAug from (https://arxiv.org/abs/2107.09645).
     Code is based (heavily) on https://github.com/facebookresearch/drqv2/blob/main/drqv2.py.
     """
+
     def __init__(self, batch_size, pad=4, noise=True, *_args, **kwargs):
         self.batch_size = batch_size
         self.pad = pad

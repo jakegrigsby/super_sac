@@ -38,8 +38,8 @@ def train_dmc_online(args):
         hidden_size=1024,
         discrete=False,
         auto_rescale_targets=False,
-        log_std_low=-5.,
-        log_std_high=2.,
+        log_std_low=-5.0,
+        log_std_high=2.0,
         beta_dist=args.beta_dist,
     )
 
@@ -66,6 +66,7 @@ def train_dmc_online(args):
         random_warmup_steps=10_000,
         max_episode_steps=1000,
         pop=False,
+        logging_method=args.logging_method,
     )
 
 
@@ -77,5 +78,11 @@ if __name__ == "__main__":
     parser.add_argument("--ensemble_size", type=int, default=1)
     parser.add_argument("--num_critics", type=int, default=2)
     parser.add_argument("--beta_dist", action="store_true")
+    parser.add_argument(
+        "--logging_method",
+        type=str,
+        default="tensorboard",
+        choices=["tensorboard", "wandb"],
+    )
     args = parser.parse_args()
     train_dmc_online(args)

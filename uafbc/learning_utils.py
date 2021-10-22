@@ -171,12 +171,17 @@ def sample_move_and_augment(buffer, batch_size, augmenter, aug_mix, per=True):
 def compute_filter_stats(
     buffer,
     agent,
+    augmenter,
     batch_size,
 ):
-    batch, _ = buffer.sample_uniform(batch_size)
-    o, a, *_ = batch
-    o = _move_dict_to_device(o)
-    a = a.to(device)
+    replay_dict = sample_move_and_augment(
+        buffer=buffer,
+        batch_size=batch_size,
+        augmenter=augmenter,
+        aug_mix=0.0,
+        per=False,
+    )
+    o, a, *_ = replay_dict["primary_batch"]
     with torch.no_grad():
         # use a random member of the ensemble to compute binary advantage filter stats
         adv = agent.adv_estimator(

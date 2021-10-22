@@ -86,6 +86,11 @@ class SimpleGymWrapper(gym.ObservationWrapper):
         return {"obs": obs.astype(np.float32)}
 
 
+class Uint8Wrapper(gym.ObservationWrapper):
+    def observation(self, obs):
+        return {"obs": obs.astype(np.uint8)}
+
+
 class KeepKeysWrapper(gym.ObservationWrapper):
     def __init__(self, env, keys):
         super().__init__(env)
