@@ -1,3 +1,23 @@
+"""
+Shows hyperparamter settings to (roughly) replicate DrqV2.
+See https://arxiv.org/abs/2107.09645.
+
+Notes on Key Changes:
+1. init_alpha, alpha_lr = 0 turns automatic entropy off
+2. exploration noise is added with decaying gaussian noise.
+3. that noise is also used in the online actor and critic updates
+    - this was the main code addition needed.
+4. faster drqv2 augmentation.
+5. drqv2 doesn't use a target encoder. We fake this change by
+   setting encoder_tau = 1.0, target_delay = 1, meaning it is fully
+   updated to the online encoder every update.
+
+We are still missing n-step returns, and the overall
+implementation is much slower due to more replay buffer sampling. No
+real plans to add n-step returns anytime soon. I will work on seeing if sunrise or discor-style critic updates can improve learning to a similar extent without
+creating off-policy issues.
+"""
+
 import argparse
 
 import numpy as np
@@ -9,7 +29,7 @@ import gym
 
 import uafbc
 from uafbc import nets
-from uafbc.augmentations import AugmentationSequence, Drqv2Aug, DrqAug
+from uafbc.augmentations import AugmentationSequence, Drqv2Aug
 
 
 class DMCREncoder(nets.Encoder):
@@ -46,8 +66,7 @@ def train_dmcr_drqv2(args):
         # deterministic actor with exploration noise
         actor_network_cls=uafbc.nets.mlps.ContinuousDeterministicActor,
         critic_network_cls=uafbc.nets.mlps.ContinuousCritic,
-        ensemble_size=args.ensemble_size,
-        num_critics=args.critics,
+        num_critics=2,
         hidden_size=1024,
         discrete=False,
         auto_rescale_targets=False,
@@ -79,8 +98,12 @@ def train_dmcr_drqv2(args):
         alpha_lr=0,
         # exploration noise, also used in updates
         use_exploration_process=True,
-        weighted_bellman_temp=1.0,
-        weight_type="softmax",
+        # control exploration noise scale schedule
+        exploration_param_init=1.0,
+        exploration_param_final=.1,
+        exploration_param_anneal=1_000_000,
+        weighted_bellman_temp=None,
+        weight_type=None,
         use_bc_update_online=False,
         # "upate delay = 2"
         transitions_per_online_step=2,
@@ -103,7 +126,5 @@ if __name__ == "__main__":
     parser.add_argument("--name", type=str, default="uafbc_dmcr_run")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--steps", type=int, default=1_000_000)
-    parser.add_argument("--ensemble_size", type=int, default=1)
-    parser.add_argument("--critics", type=int, default=2)
     args = parser.parse_args()
     train_dmcr_drqv2(args)
