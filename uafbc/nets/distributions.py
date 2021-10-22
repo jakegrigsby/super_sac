@@ -86,3 +86,10 @@ class SquashedNormal(pyd.transformed_distribution.TransformedDistribution):
         for tr in self.transforms:
             mu = tr(mu)
         return mu
+
+class ContinuousDeterministic(pyd.Normal):
+    def __init__(self, deterministic_actor_output):
+        super().__init__(loc=deterministic_actor_output, scale=1e-4, validate_args=False)
+
+    def sample(self):
+        return self.loc

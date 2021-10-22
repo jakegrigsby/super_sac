@@ -23,15 +23,28 @@ class GaussianExplorationNoise:
         self.start_scale = start_scale
         self.final_scale = final_scale
         self.steps_annealed = steps_annealed
-        self._current_scale = start_scale
+        self.current_scale = start_scale
         self._scale_slope = (start_scale - final_scale) / steps_annealed
 
-    def sample(self, action):
-        noise = self._current_scale * np.random.randn(*action.shape)
-        self._current_scale = max(
-            self._current_scale - self._scale_slope, self.final_scale
-        )
-        return np.clip(action + noise, self.action_space.low, self.action_space.high)
+    def sample(self, action, update_schedule=False):
+        if isinstance(action, np.ndarray):
+            noise = self.current_scale * np.random.randn(*action.shape)
+            noisy_action = np.clip(
+                action + noise, self.action_space.low, self.action_space.high
+            )
+        elif isinstance(action, torch.Tensor):
+            noise = self.current_scale * torch.randn(*action.shape).to(action.device)
+            noisy_action = (action + noise).clamp(
+                torch.from_numpy(self.action_space.low).to(action.device),
+                torch.from_numpy(self.action_space.high).to(action.device),
+            )
+        else:
+            raise ValueError(f"Unrecognized action array type: {type(action)}")
+        if update_schedule:
+            self.current_scale = max(
+                self.current_scale - self._scale_slope, self.final_scale
+            )
+        return noisy_action
 
 
 class EpsilonGreedyExplorationNoise:
@@ -41,19 +54,20 @@ class EpsilonGreedyExplorationNoise:
         self.eps_start = eps_start
         self.eps_final = eps_final
         self.steps_annealed = steps_annealed
-        self._current_eps = eps_start
+        self.current_scale = eps_start
         self._eps_slope = (eps_start - eps_final) / steps_annealed
 
-    def sample(self, action):
-        if random.random() < self._current_eps:
+    def sample(self, action, update_schedule=False):
+        if random.random() < self.current_scale:
             rand_action = np.zeros_like(action)
             for i in range(len(action)):
                 rand_action[i] = self.action_space.sample()
             action = rand_action
-        self._current_eps = max(
-            self._current_eps - self._eps_slope,
-            self.eps_final,
-        )
+        if update_schedule:
+            self.current_scale = max(
+                self.current_scale - self._eps_slope,
+                self.eps_final,
+            )
         return action
 
 
@@ -119,6 +133,7 @@ def sample_move_and_augment(buffer, batch_size, augmenter, aug_mix, per=True):
         batch, priority_idxs = buffer.sample_uniform(batch_size)
         imp_weights = torch.ones(1).float()
     imp_weights = imp_weights.to(device)
+
     # "original observation", "action", "original observation t+1"
     oo, a, r, oo1, d = batch
     # move to the appropriate device (probably a gpu)
@@ -127,6 +142,13 @@ def sample_move_and_augment(buffer, batch_size, augmenter, aug_mix, per=True):
     r = r.to(device)
     oo1 = _move_dict_to_device(oo1)
     d = d.to(device)
+
+    # now that data is on gpu, cast to float
+    oo = {key: val.float() for key, val in oo.items()}
+    a = a.float()
+    r = r.float()
+    oo1 = {key: val.float() for key, val in oo1.items()}
+    d = d.float()
 
     # augment the observation tensors and mix them into the batch
     aug_mix_idx = int(batch_size * aug_mix)
@@ -187,7 +209,7 @@ def filtered_bc_loss(
     if discrete:
         logp_a = dist.log_prob(a.squeeze(1)).unsqueeze(1)
     else:
-        logp_a = dist.log_prob(a).sum(-1, keepdim=True).clamp(-100., 100.)
+        logp_a = dist.log_prob(a).sum(-1, keepdim=True).clamp(-100.0, 100.0)
     if filter_:
         logs[f"losses/adv_weights_mean"] = adv_weights.mean().item()
         logp_a *= adv_weights
@@ -232,6 +254,7 @@ def compute_td_targets(
     log_alphas,
     pop,
     gamma,
+    random_process,
     discrete=False,
 ):
     o, a, r, o1, d = replay_dict["primary_batch"]
@@ -253,6 +276,8 @@ def compute_td_targets(
             )
         else:
             a_s1 = a_dist_s1.sample()
+            if random_process is not None:
+                a_s1 = random_process.sample(a_s1, update_schedule=False)
             logp_a1 = a_dist_s1.log_prob(a_s1).sum(-1, keepdim=True)
             s1_q_pred = target_critic(s1_rep, a_s1, subset=ensemble_n)
             val_s1 = s1_q_pred - (log_alpha.exp() * logp_a1)
