@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import gym
 from minatar import Environment
 
-from uafbc import nets
+from super_sac import nets
 
 
 class MinAtarEnv(gym.Wrapper):

@@ -2,11 +2,13 @@ import torch
 import torch.nn.functional as F
 from torch import distributions as pyd
 from torch import nn
+import gin
 
 
 from . import distributions, weight_init
 
 
+@gin.configurable
 class ContinuousStochasticActor(nn.Module):
     def __init__(
         self,
@@ -46,6 +48,7 @@ class ContinuousStochasticActor(nn.Module):
         return dist
 
 
+@gin.configurable
 class ContinuousDeterministicActor(nn.Module):
     def __init__(self, state_size, action_size, hidden_size=256, **kwargs):
         super().__init__()
@@ -62,6 +65,7 @@ class ContinuousDeterministicActor(nn.Module):
         return dist
 
 
+@gin.configurable
 class ContinuousCritic(nn.Module):
     def __init__(self, state_size, action_size, hidden_size=256):
         super().__init__()
@@ -77,6 +81,7 @@ class ContinuousCritic(nn.Module):
         return val
 
 
+@gin.configurable
 class DiscreteActor(nn.Module):
     def __init__(self, state_size, action_size, hidden_size=256):
         super().__init__()
@@ -92,6 +97,7 @@ class DiscreteActor(nn.Module):
         return dist
 
 
+@gin.configurable
 class DiscreteCritic(nn.Module):
     def __init__(self, state_size, action_size, hidden_size=300):
         super().__init__()

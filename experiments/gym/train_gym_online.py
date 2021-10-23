@@ -1,16 +1,13 @@
 import argparse
+import os
 
-import numpy as np
-import torch
-from torch import nn
-import torch.nn.functional as F
 import gym
 
 import pybullet
 import pybullet_envs
 
-import uafbc
-from uafbc.wrappers import (
+import super_sac
+from super_sac.wrappers import (
     SimpleGymWrapper,
     NormActionSpace,
     ParallelActors,
@@ -19,7 +16,7 @@ from uafbc.wrappers import (
 )
 
 
-class IdentityEncoder(uafbc.nets.Encoder):
+class IdentityEncoder(super_sac.nets.Encoder):
     def __init__(self, dim):
         super().__init__()
         self._dim = dim
@@ -50,16 +47,16 @@ def train_gym_online(args):
         test_env.reset()  # fix common gym render bug
 
     if discrete:
-        actor_network_cls = uafbc.nets.mlps.DiscreteActor
-        critic_network_cls = uafbc.nets.mlps.DiscreteCritic
+        actor_network_cls = super_sac.nets.mlps.DiscreteActor
+        critic_network_cls = super_sac.nets.mlps.DiscreteCritic
         act_space_size = train_env.action_space.n
     else:
-        actor_network_cls = uafbc.nets.mlps.ContinuousStochasticActor
-        critic_network_cls = uafbc.nets.mlps.ContinuousCritic
+        actor_network_cls = super_sac.nets.mlps.ContinuousStochasticActor
+        critic_network_cls = super_sac.nets.mlps.ContinuousCritic
         act_space_size = train_env.action_space.shape[0]
 
     # create agent
-    agent = uafbc.Agent(
+    agent = super_sac.Agent(
         act_space_size=act_space_size,
         encoder=IdentityEncoder(train_env.observation_space.shape[0]),
         actor_network_cls=actor_network_cls,
@@ -72,10 +69,10 @@ def train_gym_online(args):
         auto_rescale_targets=args.popart,
     )
 
-    buffer = uafbc.replay.PrioritizedReplayBuffer(size=1_000_000)
+    buffer = super_sac.replay.PrioritizedReplayBuffer(size=1_000_000)
 
     # run training
-    uafbc.uafbc(
+    super_sac.super_sac(
         agent=agent,
         train_env=train_env,
         test_env=test_env,
@@ -104,13 +101,16 @@ def train_gym_online(args):
         alpha_lr=1e-4,
         render=args.render,
         logging_method=args.logging_method,
+        wandb_entity=os.getenv("SSAC_WANDB_ACCOUNT"),
+        wandb_project=os.getenv("SSAC_WANDB_PROJECT"),
+        base_save_path=os.getenv("SSAC_SAVE"),
     )
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--env", type=str, default="Pendulum-v0")
-    parser.add_argument("--name", type=str, default="uafbc_pendulum_run")
+    parser.add_argument("--name", type=str, default="super_sac_pendulum_run")
     parser.add_argument("--ucb_bonus", type=float, default=0.0)
     parser.add_argument("--r_scale", type=float, default=1.0)
     parser.add_argument("--ensemble_size", type=int, default=1)

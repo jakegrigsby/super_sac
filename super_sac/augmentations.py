@@ -37,6 +37,9 @@ class AugmentationSequence:
             results.append(batch)
         return tuple(results) if len(results) > 1 else results[0]
 
+    def __repr__(self):
+        return f"AugmentationSequence: ({[repr(aug) for aug in self.aug_list]})"
+
 
 class GrayscaleAug:
     def __init__(self, batch_size, p_rand=0.5, *_args, **_kwargs):
@@ -73,6 +76,9 @@ class GrayscaleAug:
 
     def print_parms(self):
         print(self.random_inds)
+
+    def __repr__(self):
+        return "Grayscale"
 
 
 class CutoutAug:
@@ -118,6 +124,9 @@ class CutoutAug:
         print(self.w1)
         print(self.h1)
 
+    def __repr__(self):
+        return "Cutout"
+
 
 class RadAug:
     """
@@ -150,6 +159,9 @@ class RadAug:
         for i, (crop_h, crop_w) in enumerate(zip(self.h, self.w)):
             imgs[i, ...] = upscaled_imgs[i, :, crop_h : h + crop_h, crop_w : w + crop_w]
         return imgs
+
+    def __repr__(self):
+        return "RAD"
 
 
 class DrqAug:
@@ -196,6 +208,9 @@ class DrqAug:
     def print_params(self):
         print(self.w1)
         print(self.h1)
+
+    def __repr__(self):
+        return "Drqv1"
 
 
 class Drqv2Aug:
@@ -252,20 +267,32 @@ class Drqv2Aug:
     def print_params(self):
         pass
 
+    def __repr__(self):
+        return "DrqV2"
+
 
 class DrqNoNoiseAug(DrqAug):
     def __init__(self, batch_size, pad=4, noise=False, *_args, **kwargs):
         super().__init__(batch_size, pad, noise)
+
+    def __repr__(self):
+        return "Drqv1NoNoise"
 
 
 class LargeDrqNoNoiseAug(DrqAug):
     def __init__(self, batch_size, pad=12, noise=False, *_args, **kwargs):
         super().__init__(batch_size, pad, noise)
 
+    def __repr__(self):
+        return "Drqv1LargeNoNoise"
+
 
 class LargeDrqAug(DrqAug):
     def __init__(self, batch_size, pad=12, *_args, **kwargs):
         super().__init__(batch_size, pad)
+
+    def __repr__(self):
+        return "Drqv1Large"
 
 
 class TranslateAug:
@@ -315,10 +342,16 @@ class TranslateAug:
         ].type(torch.float32)
         return final.to(imgs.device)
 
+    def __repr__(self):
+        return "Translate"
+
 
 class LargeTranslateAug(TranslateAug):
     def __init__(self, batch_size, translate_max=8, *_args, **kwargs):
         super().__init__(batch_size, translate_max)
+
+    def __repr__(self):
+        return "LargeTranslate"
 
 
 class CutoutColorAug:
@@ -365,6 +398,9 @@ class CutoutColorAug:
         print(self.w1)
         print(self.h1)
 
+    def __repr__(self):
+        return "CutoutColor"
+
 
 class GammaAug:
     gamma_mean = 1.0
@@ -385,6 +421,9 @@ class GammaAug:
         imgs = imgs.pow(self.gamma.to(imgs.device))
         imgs *= 255.0
         return imgs.clamp(0.0, 255.0)
+
+    def __repr__(self):
+        return "Gamma"
 
 
 class _FlipAug:
@@ -413,10 +452,16 @@ class HorizontalFlipAug(_FlipAug):
     def __init__(self, batch_size, p_rand=0.5, *_args, **kwargs):
         super().__init__(batch_size, p_rand, dim=3)
 
+    def __repr__(self):
+        return "HorizontalFlip"
+
 
 class VerticalFlipAug(_FlipAug):
     def __init__(self, batch_size, p_rand=0.5, *_args, **kwargs):
         super().__init__(batch_size, p_rand, dim=2)
+
+    def __repr__(self):
+        return "VerticalFlip"
 
 
 class RotateAug:
@@ -444,6 +489,9 @@ class RotateAug:
     def print_parms(self):
         print(self.random_inds)
 
+    def __repr__(self):
+        return "Rotate"
+
 
 class IdentityAug:
     def __init__(self, batch_size, *_args, **_kwargs):
@@ -457,6 +505,9 @@ class IdentityAug:
 
     def print_parms(self):
         return
+
+    def __repr__(self):
+        return "Identity"
 
 
 class WindowAug:
@@ -485,6 +536,9 @@ class WindowAug:
     def print_parms(self):
         print(self.w1)
         print(self.h1)
+
+    def __repr__(self):
+        return "Window"
 
 
 class ColorJitterAug(torch.nn.Module):
@@ -638,6 +692,9 @@ class ColorJitterAug(torch.nn.Module):
         if random_inds.sum() > 0:
             inputs[inds] = self.transform(inputs[inds])
         return inputs
+
+    def __repr__(self):
+        return "ColorJitter"
 
 
 def rgb2hsv(rgb, eps=1e-8):

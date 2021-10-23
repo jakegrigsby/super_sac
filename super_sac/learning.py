@@ -90,8 +90,6 @@ def critic_update(
             critic_loss += (
                 backup_weights * replay_dict["imp_weights"] * (td_error ** 2)
             ) / agent.num_critics
-        logs[f"losses/critic_loss_{i}"] = critic_loss.mean().item()
-        logs[f"gradients/critic_grad_{i}"] = lu.get_grad_norm(agent.critics[i])
 
     critic_loss = (critic_loss).mean() / (agent.ensemble_size)
 
@@ -114,6 +112,9 @@ def critic_update(
     encoder_optimizer.step()
 
     logs["losses/critic_overall_loss"] = critic_loss
+    logs["gradients/critic_random_grad"] = lu.get_grad_norm(
+        random.choice(agent.critics)
+    )
     logs["gradients/encoder_criticloss_grad_norm"] = lu.get_grad_norm(agent.encoder)
     if update_priorities:
         lu.adjust_priorities(logs, replay_dict, agent, buffer)

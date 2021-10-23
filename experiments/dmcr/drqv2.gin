@@ -1,0 +1,81 @@
+import super_sac.main
+import super_sac.nets
+import super_sac.agent
+
+agent.Agent.num_critics = 2
+agent.Agent.ensemble_size = 1
+agent.Agent.hidden_size = 1024
+agent.Agent.log_std_low = -5.0
+agent.Agent.log_std_high = 2.
+agent.Agent.beta_dist = False
+agent.Agent.ucb_bonus = 0.0
+agent.Agent.discrete = False
+agent.Agent.adv_method = None
+# deterministic actor
+agent.Agent.actor_network_cls = @super_sac.nets.mlps.ContinuousDeterministicActor
+agent.Agent.critic_network_cls = @super_sac.nets.mlps.ContinuousCritic
+agent.Agent.auto_rescale_targets = False
+
+main.super_sac.num_steps_offline = 0
+main.super_sac.num_steps_online = 1_000_000
+main.super_sac.offline_actor_updates_per_step = 0
+main.super_sac.online_actor_updates_per_step = 1
+main.super_sac.critic_updates_per_step = 1
+main.super_sac.target_critic_ensemble_n = 2
+main.super_sac.batch_size = 256
+main.super_sac.actor_lr = 1e-4
+main.super_sac.critic_lr = 1e-4
+main.super_sac.encoder_lr = 1e-4
+main.super_sac.actor_clip = 40
+main.super_sac.critic_clip = 40
+main.super_sac.encoder_clip = 40
+main.super_sac.actor_l2 = 0
+main.super_sac.critic_l2 = 0
+main.super_sac.encoder_l2 = 0
+main.super_sac.random_warmup_steps = 6_000
+main.super_sac.pop = False
+main.super_sac.gamma = .99
+
+# manual (ddpg-like) exploration
+main.super_sac.use_exploration_process = True
+main.super_sac.exploration_param_init = 1.0
+main.super_sac.exploration_param_final = .1
+main.super_sac.exploration_param_anneal = 1_000_000
+main.super_sac.init_alpha = 0
+main.super_sac.target_entropy_mul = 0
+main.super_sac.alpha_lr = 0
+
+
+# higher mlp tau
+main.super_sac.mlp_tau = .01
+# no target encoder. we fake this by setting encoder_tau = 1.0, target_delay = 1
+main.super_sac.encoder_tau = 1.0
+main.super_sac.target_delay = 1
+
+main.super_sac.use_pg_update_online = True
+main.super_sac.use_bc_update_online = False
+main.super_sac.weighted_bellman_temp = None
+main.super_sac.weight_type = None
+main.super_sac.afbc_per = False
+
+# two updates per step
+main.super_sac.transitions_per_online_step = 2
+
+main.super_sac.infinite_bootstrap = True
+main.super_sac.ignore_all_dones = False
+main.super_sac.max_episode_steps = 1000
+main.super_sac.eval_episodes = 10
+main.super_sac.eval_interval = 10_000
+main.super_sac.render = False
+
+main.super_sac.log_to_disk = True
+main.super_sac.log_interval = 1000
+main.super_sac.save_to_disk = True
+main.super_sac.save_interval = 10_000
+main.super_sac.verbosity = 1
+
+main.super_sac.encoder_lambda = 0
+main.super_sac.actor_lambda = 0
+main.super_sac.aug_mix = .9
+
+
