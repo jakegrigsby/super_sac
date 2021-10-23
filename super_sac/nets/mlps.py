@@ -55,6 +55,7 @@ class ContinuousDeterministicActor(nn.Module):
         self.fc1 = nn.Linear(state_size, hidden_size)
         self.fc2 = nn.Linear(hidden_size, hidden_size)
         self.out = nn.Linear(hidden_size, action_size)
+        self.apply(weight_init)
         self.dist_impl = "deterministic"
 
     def forward(self, state):
@@ -72,6 +73,7 @@ class ContinuousCritic(nn.Module):
         self.fc1 = nn.Linear(state_size + action_size, hidden_size)
         self.fc2 = nn.Linear(hidden_size, hidden_size)
         self.out = nn.Linear(hidden_size, 1)
+        self.apply(weight_init)
 
     def forward(self, state, action):
         x = torch.cat((state, action), dim=-1)
@@ -88,6 +90,7 @@ class DiscreteActor(nn.Module):
         self.fc1 = nn.Linear(state_size, hidden_size)
         self.fc2 = nn.Linear(hidden_size, hidden_size)
         self.act_p = nn.Linear(hidden_size, action_size)
+        self.apply(weight_init)
 
     def forward(self, state):
         x = F.relu(self.fc1(state))
@@ -104,6 +107,7 @@ class DiscreteCritic(nn.Module):
         self.fc1 = nn.Linear(state_size, hidden_size)
         self.fc2 = nn.Linear(hidden_size, hidden_size)
         self.out = nn.Linear(hidden_size, action_size)
+        self.apply(weight_init)
 
     def forward(self, state):
         x = F.relu(self.fc1(state))

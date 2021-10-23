@@ -88,6 +88,7 @@ def super_sac(
     save_interval=5000,
     verbosity=0,
 ):
+
     def _get_parallel_envs(env):
         _env = env
         while hasattr(_env, "env"):
@@ -426,7 +427,7 @@ def super_sac(
                         buffer=buffer,
                         agent=agent,
                         pop=pop,
-                        optimizer=online_actor_optimizer,
+                        actor_optimizer=online_actor_optimizer,
                         log_alphas=log_alphas,
                         batch_size=batch_size,
                         aug_mix=aug_mix,
