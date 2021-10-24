@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-import uafbc
+import super_sac
 
 """
 This is code is from https://github.com/stanford-iprl-lab/GRAC/blob/master/ES.py
@@ -20,7 +20,7 @@ class _CEM:
         damp_limit=1e-5,
         parents=None,
         elitism=True,
-        device=uafbc.device,
+        device=super_sac.device,
     ):
 
         # misc
@@ -122,7 +122,7 @@ class CEM:
         damp=0.1,
         damp_limit=0.05,
         parents=5,
-        device=uafbc.device,
+        device=super_sac.device,
     ):
         self.sigma_init = sigma_init
         self.clip = clip

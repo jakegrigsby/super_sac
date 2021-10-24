@@ -5,6 +5,7 @@ import numpy as np
 import torch
 from torch import nn
 import torch.nn.functional as F
+import gin
 
 from . import device, popart, adv_estimator
 
@@ -36,6 +37,7 @@ class Critic(nn.Module):
             return tuple(preds)
 
 
+@gin.configurable
 class Agent:
     def __init__(
         self,

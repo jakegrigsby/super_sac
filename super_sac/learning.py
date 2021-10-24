@@ -90,8 +90,9 @@ def critic_update(
             critic_loss += (
                 backup_weights * replay_dict["imp_weights"] * (td_error ** 2)
             ) / agent.num_critics
-        logs[f"losses/critic_loss_{i}"] = critic_loss.mean().item()
-        logs[f"gradients/critic_grad_{i}"] = lu.get_grad_norm(agent.critics[i])
+
+        if update_priorities:
+            lu.adjust_priorities(logs, replay_dict, agent, buffer)
 
     critic_loss = (critic_loss).mean() / (agent.ensemble_size)
 
@@ -114,9 +115,11 @@ def critic_update(
     encoder_optimizer.step()
 
     logs["losses/critic_overall_loss"] = critic_loss
+    logs["gradients/critic_random_grad"] = lu.get_grad_norm(
+        random.choice(agent.critics)
+    )
     logs["gradients/encoder_criticloss_grad_norm"] = lu.get_grad_norm(agent.encoder)
-    if update_priorities:
-        lu.adjust_priorities(logs, replay_dict, agent, buffer)
+
     return logs
 
 
@@ -164,6 +167,10 @@ def offline_actor_update(
                 agent=agent,
                 ensemble_idx=ensemble_idx,
             )
+
+        if per:
+            lu.adjust_priorities(logs, replay_dict, agent, buffer)
+
     loss /= agent.ensemble_size
 
     actor_optimizer.zero_grad()
@@ -181,9 +188,6 @@ def offline_actor_update(
     actor_optimizer.step()
     if update_encoder:
         encoder_optimizer.step()
-
-    if per:
-        lu.adjust_priorities(logs, replay_dict, agent, buffer)
     logs["losses/filtered_bc_overall_loss"] = loss.item()
     logs["gradients/actor_offline_grad_norm"] = lu.get_grad_norm(
         random.choice(agent.actors)
@@ -228,7 +232,8 @@ def alpha_update(
                 .sum(-1, keepdim=True)
                 .clamp(-100.0, 100.0)
             )
-        alpha_loss = -(log_alphas[i] * (logp_a + target_entropy).detach()).mean()
+        #alpha_loss = -(log_alphas[i] * (logp_a + target_entropy).detach()).mean()
+        alpha_loss = -(log_alphas[i].exp() * (logp_a + target_entropy).detach()).mean()
         optimizers[i].zero_grad()
         alpha_loss.backward()
         optimizers[i].step()
@@ -241,7 +246,7 @@ def online_actor_update(
     buffer,
     agent,
     pop,
-    optimizer,
+    actor_optimizer,
     log_alphas,
     batch_size,
     clip,
@@ -297,13 +302,13 @@ def online_actor_update(
         logs[f"gradients/actor_online_grad_{i}"] = lu.get_grad_norm(actor)
     actor_loss /= len(agent.actors)
 
-    optimizer.zero_grad()
+    actor_optimizer.zero_grad()
     actor_loss.backward()
     if clip:
         torch.nn.utils.clip_grad_norm_(
             chain(*(actor.parameters() for actor in agent.actors)), clip
         )
-    optimizer.step()
+    actor_optimizer.step()
 
     logs["losses/actor_online_overall_loss"] = actor_loss.item()
     return logs

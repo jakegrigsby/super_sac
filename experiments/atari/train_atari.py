@@ -1,13 +1,9 @@
-import gym
+import gin
+import os
 
-import numpy as np
-import torch
-from torch import nn
-import torch.nn.functional as F
-
-import uafbc
-from uafbc import nets
-from uafbc.augmentations import AugmentationSequence, Drqv2Aug
+import super_sac
+from super_sac import nets
+from super_sac.augmentations import AugmentationSequence, Drqv2Aug
 
 
 class AtariEncoder(nets.Encoder):
@@ -25,58 +21,37 @@ class AtariEncoder(nets.Encoder):
 
 
 def train_atari(args):
-    def make_env():
-        return uafbc.wrappers.load_atari(args.game, frame_skip=4)
+    gin.parse_config_file(args.config)
 
-    train_env = uafbc.wrappers.Uint8Wrapper(
-        uafbc.wrappers.ParallelActors(make_env, args.actors)
+    def make_env():
+        return super_sac.wrappers.load_atari(args.game, frame_skip=4)
+
+    train_env = super_sac.wrappers.Uint8Wrapper(
+        super_sac.wrappers.ParallelActors(make_env, args.parallel_actors)
     )
-    test_env = uafbc.wrappers.Uint8Wrapper(make_env())
+    test_env = super_sac.wrappers.Uint8Wrapper(make_env())
 
     # create agent
     img_shape = train_env.observation_space.shape
-    agent = uafbc.Agent(
+    agent = super_sac.Agent(
         act_space_size=train_env.action_space.n,
         encoder=AtariEncoder(img_shape, emb_dim=128),
-        actor_network_cls=uafbc.nets.mlps.DiscreteActor,
-        critic_network_cls=uafbc.nets.mlps.DiscreteCritic,
-        hidden_size=256,
-        discrete=True,
-        num_critics=2,
-        ensemble_size=1,
-        auto_rescale_targets=args.popart,
     )
 
-    buffer = uafbc.replay.PrioritizedReplayBuffer(size=500_000)
+    buffer = super_sac.replay.PrioritizedReplayBuffer(size=1_000_000)
 
     # run training
-    uafbc.uafbc(
+    super_sac.super_sac(
         agent=agent,
         train_env=train_env,
         test_env=test_env,
         buffer=buffer,
-        verbosity=1,
         name=args.name,
-        use_pg_update_online=True,
-        use_bc_update_online=False,
-        num_steps_offline=0,
-        num_steps_online=args.steps,
-        random_warmup_steps=1_000,
-        max_episode_steps=108_000,
-        actor_clip=40.0,
-        critic_clip=40.0,
-        encoder_clip=40.0,
-        batch_size=64,
-        pop=args.popart,
-        weighted_bellman_temp=None,
-        weight_type=None,
-        critic_updates_per_step=1,
-        eval_episodes=10,
-        init_alpha=0.1,
-        target_entropy_mul=1.0,
-        alpha_lr=1e-4,
-        logging_method=args.logging_method,
-        augmenter=AugmentationSequence([Drqv2Aug(64)]),
+        augmenter=AugmentationSequence([Drqv2Aug(128)]),
+        logging_method="wandb",
+        wandb_entity=os.getenv("SSAC_WANDB_ACCOUNT"),
+        wandb_project=os.getenv("SSAC_WANDB_PROJECT"),
+        base_save_path=os.getenv("SSAC_SAVE"),
     )
 
 
@@ -86,14 +61,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--name", type=str, help="Name of logging dir", required=True)
     parser.add_argument("--game", type=str, default="PongNoFrameskip-v4")
-    parser.add_argument("--steps", type=int, default=10_000_000)
-    parser.add_argument("--popart", action="store_true")
-    parser.add_argument("--actors", type=int, default=1)
-    parser.add_argument(
-        "--logging_method",
-        type=str,
-        default="tensorboard",
-        choices=["tensorboard", "wandb"],
-    )
+    parser.add_argument("--config", type=str, required=True)
+    parser.add_argument("--parallel_actors", type=int, default=1)
     args = parser.parse_args()
     train_atari(args)

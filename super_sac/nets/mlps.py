@@ -2,11 +2,13 @@ import torch
 import torch.nn.functional as F
 from torch import distributions as pyd
 from torch import nn
+import gin
 
 
 from . import distributions, weight_init
 
 
+@gin.configurable
 class ContinuousStochasticActor(nn.Module):
     def __init__(
         self,
@@ -46,12 +48,14 @@ class ContinuousStochasticActor(nn.Module):
         return dist
 
 
+@gin.configurable
 class ContinuousDeterministicActor(nn.Module):
     def __init__(self, state_size, action_size, hidden_size=256, **kwargs):
         super().__init__()
         self.fc1 = nn.Linear(state_size, hidden_size)
         self.fc2 = nn.Linear(hidden_size, hidden_size)
         self.out = nn.Linear(hidden_size, action_size)
+        self.apply(weight_init)
         self.dist_impl = "deterministic"
 
     def forward(self, state):
@@ -62,12 +66,14 @@ class ContinuousDeterministicActor(nn.Module):
         return dist
 
 
+@gin.configurable
 class ContinuousCritic(nn.Module):
     def __init__(self, state_size, action_size, hidden_size=256):
         super().__init__()
         self.fc1 = nn.Linear(state_size + action_size, hidden_size)
         self.fc2 = nn.Linear(hidden_size, hidden_size)
         self.out = nn.Linear(hidden_size, 1)
+        self.apply(weight_init)
 
     def forward(self, state, action):
         x = torch.cat((state, action), dim=-1)
@@ -77,12 +83,14 @@ class ContinuousCritic(nn.Module):
         return val
 
 
+@gin.configurable
 class DiscreteActor(nn.Module):
     def __init__(self, state_size, action_size, hidden_size=256):
         super().__init__()
         self.fc1 = nn.Linear(state_size, hidden_size)
         self.fc2 = nn.Linear(hidden_size, hidden_size)
         self.act_p = nn.Linear(hidden_size, action_size)
+        self.apply(weight_init)
 
     def forward(self, state):
         x = F.relu(self.fc1(state))
@@ -92,12 +100,14 @@ class DiscreteActor(nn.Module):
         return dist
 
 
+@gin.configurable
 class DiscreteCritic(nn.Module):
     def __init__(self, state_size, action_size, hidden_size=300):
         super().__init__()
         self.fc1 = nn.Linear(state_size, hidden_size)
         self.fc2 = nn.Linear(hidden_size, hidden_size)
         self.out = nn.Linear(hidden_size, action_size)
+        self.apply(weight_init)
 
     def forward(self, state):
         x = F.relu(self.fc1(state))

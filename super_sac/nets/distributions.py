@@ -65,7 +65,7 @@ class TanhTransform(pyd.transforms.Transform):
         return x.tanh()
 
     def _inverse(self, y):
-        return self.atanh(y.clamp(-.99, .99))
+        return self.atanh(y.clamp(-0.99, 0.99))
 
     def log_abs_det_jacobian(self, x, y):
         return 2.0 * (math.log(2.0) - x - F.softplus(-2.0 * x))
@@ -87,9 +87,12 @@ class SquashedNormal(pyd.transformed_distribution.TransformedDistribution):
             mu = tr(mu)
         return mu
 
+
 class ContinuousDeterministic(pyd.Normal):
     def __init__(self, deterministic_actor_output):
-        super().__init__(loc=deterministic_actor_output, scale=1e-4, validate_args=False)
+        super().__init__(
+            loc=deterministic_actor_output, scale=1e-4, validate_args=False
+        )
 
     def sample(self):
         return self.loc
