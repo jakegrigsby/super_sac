@@ -78,9 +78,9 @@ def super_sac(
     aug_mix=0.9,
     # logging, misc
     logging_method="tensorboard",
-    wandb_entity=None,
-    wandb_project=None,
-    base_save_path=None,
+    wandb_entity=os.getenv("SSAC_WANDB_ACCOUNT"),
+    wandb_project=os.getenv("SSAC_WANDB_PROJECT"),
+    base_save_path="./saves",
     name="afbc_run",
     log_to_disk=True,
     log_interval=5000,
@@ -102,8 +102,6 @@ def super_sac(
     num_eval_envs = _get_parallel_envs(test_env)
 
     if save_to_disk or log_to_disk:
-        if base_save_path is None:
-            base_save_path = "./saves"
         save_dir = make_process_dirs(name, base_save_path)
     if log_to_disk:
         if logging_method == "tensorboard":
@@ -115,12 +113,10 @@ def super_sac(
                 set the os environment variables `SSAC_WANDB_ACCOUNT` and `SSAC_WANDB_PROJECT`, \n\
                 respectively. Super SAC will default to those values."
             import wandb
-
             wandb.init(
                 project=wandb_project, entity=wandb_entity, dir=save_dir, reinit=True
             )
             wandb.run.name = name
-            wandb.run.save()
 
     if augmenter is None:
         augmenter = augmentations.AugmentationSequence(
