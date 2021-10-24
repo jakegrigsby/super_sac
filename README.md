@@ -1,6 +1,6 @@
 # Super SAC
 
-This repository contains the code for a PyTorch RL agent that is designed to be a compilation of advanced Off-Policy Actor-Critic variants. It includes elements of [SAC](https://arxiv.org/abs/1812.05905), [SAC-Discrete](https://arxiv.org/abs/1910.07207), [DrQ](https://arxiv.org/abs/2004.13649), [DrAC](https://arxiv.org/abs/2006.12862), [RAD](https://arxiv.org/abs/2004.14990), [SAC+AE](https://arxiv.org/abs/1910.01741), [REDQ](https://arxiv.org/abs/2101.05982), [CRR](https://arxiv.org/abs/2006.15134), [AWAC](https://arxiv.org/abs/2006.09359), and [SUNRISE](https://arxiv.org/abs/2007.04938).
+This repository contains the code for a PyTorch RL agent that is designed to be a compilation of advanced Off-Policy Actor-Critic variants. It includes elements of [SAC](https://arxiv.org/abs/1812.05905), [SAC-Discrete](https://arxiv.org/abs/1910.07207), [DrQ](https://arxiv.org/abs/2004.13649), [DrAC](https://arxiv.org/abs/2006.12862), [RAD](https://arxiv.org/abs/2004.14990), [SAC+AE](https://arxiv.org/abs/1910.01741), [REDQ](https://arxiv.org/abs/2101.05982), [CRR](https://arxiv.org/abs/2006.15134), [AWAC](https://arxiv.org/abs/2006.09359), [SUNRISE](https://arxiv.org/abs/2007.04938), and [DrQv2](https://arxiv.org/abs/2107.09645).
 
 **This is an active work in progress and I add breaking features often as I need them in my research. If you have any suggestions or questions please feel free to open an issue.**
 
@@ -26,8 +26,6 @@ At some point I will write real documentation. For now see the `examples/` folde
 - Image-based discrete-action games from Atari, [MinAtar](https://github.com/kenjyoung/MinAtar).
 - Offline RL in Atari, [D4RL](https://github.com/rail-berkeley/d4rl).
 - Image-based continuous control from [DMCR](https://arxiv.org/abs/2010.06740).
-
-(Please Note: examples that rely on MuJoCo (some gym tasks, D4RL, DMCR) are the least tested because my student licenses have expired since I implemented them...)
 
 
 
