@@ -16,7 +16,12 @@ from . import device, replay
 
 class GaussianExplorationNoise:
     def __init__(
-        self, action_space, start_scale=1.0, final_scale=0.1, steps_annealed=1000, eps=.01,
+        self,
+        action_space,
+        start_scale=1.0,
+        final_scale=0.1,
+        steps_annealed=1000,
+        eps=0.01,
     ):
         assert start_scale >= final_scale
         self.action_space = action_space
@@ -31,7 +36,9 @@ class GaussianExplorationNoise:
         if isinstance(action, np.ndarray):
             noise = self.current_scale * np.random.randn(*action.shape)
             noisy_action = np.clip(
-                action + noise, self.action_space.low + self.eps, self.action_space.high - self.eps,
+                action + noise,
+                self.action_space.low + self.eps,
+                self.action_space.high - self.eps,
             )
         elif isinstance(action, torch.Tensor):
             noise = self.current_scale * torch.randn(*action.shape).to(action.device)
@@ -284,11 +291,13 @@ def compute_td_targets(
             a_s1 = a_dist_s1.sample()
             if random_process is not None:
                 a_s1 = random_process.sample(a_s1, update_schedule=False)
-                entropy_bonus = 0.0
+                entropy_bonus = torch.Tensor([0.0]).to(a_s1.device)
             else:
                 logp_a1 = a_dist_s1.log_prob(a_s1).sum(-1, keepdim=True)
-                entropy_bonus = (log_alpha.exp() * logp_a1)
-            logs[f"td_targets/mean_entropy_bonus_{ensemble_idx}"] = entropy_bonus.mean().item()
+                entropy_bonus = log_alpha.exp() * logp_a1
+            logs[
+                f"td_targets/mean_entropy_bonus_{ensemble_idx}"
+            ] = entropy_bonus.mean().item()
             s1_q_pred = target_critic(s1_rep, a_s1, subset=ensemble_n)
             val_s1 = s1_q_pred - (entropy_bonus)
         if popart and pop:
