@@ -1,5 +1,6 @@
 import random
 import contextlib
+from collections import deque
 
 import numpy as np
 import torch
@@ -16,7 +17,12 @@ from . import device, replay
 
 class GaussianExplorationNoise:
     def __init__(
-        self, action_space, start_scale=1.0, final_scale=0.1, steps_annealed=1000
+        self,
+        action_space,
+        start_scale=1.0,
+        final_scale=0.1,
+        steps_annealed=1000,
+        eps=0.01,
     ):
         assert start_scale >= final_scale
         self.action_space = action_space
@@ -25,18 +31,21 @@ class GaussianExplorationNoise:
         self.steps_annealed = steps_annealed
         self.current_scale = start_scale
         self._scale_slope = (start_scale - final_scale) / steps_annealed
+        self.eps = eps
 
     def sample(self, action, update_schedule=False):
         if isinstance(action, np.ndarray):
             noise = self.current_scale * np.random.randn(*action.shape)
             noisy_action = np.clip(
-                action + noise, self.action_space.low, self.action_space.high
+                action + noise,
+                self.action_space.low + self.eps,
+                self.action_space.high - self.eps,
             )
         elif isinstance(action, torch.Tensor):
             noise = self.current_scale * torch.randn(*action.shape).to(action.device)
             noisy_action = (action + noise).clamp(
-                torch.from_numpy(self.action_space.low).to(action.device),
-                torch.from_numpy(self.action_space.high).to(action.device),
+                torch.from_numpy(self.action_space.low).to(action.device) + self.eps,
+                torch.from_numpy(self.action_space.high).to(action.device) - self.eps,
             )
         else:
             raise ValueError(f"Unrecognized action array type: {type(action)}")
@@ -85,16 +94,20 @@ def get_grad_norm(model):
     return total_norm
 
 
-def warmup_buffer(buffer, env, warmup_steps, max_episode_steps, num_envs=1):
+def warmup_buffer(
+    buffer, env, warmup_steps, max_episode_steps, n_step, gamma, num_envs=1
+):
     # use warmp up steps to add random transitions to the buffer
     state = env.reset()
     done = False
     steps_this_ep = 0
+    exp_deque = deque([], maxlen=n_step)
     for _ in range(warmup_steps):
         if done:
             state = env.reset()
             steps_this_ep = 0
             done = False
+            exp_deque.clear()
         rand_action = env.action_space.sample()
         if not isinstance(rand_action, np.ndarray):
             rand_action = np.array(float(rand_action))
@@ -103,7 +116,15 @@ def warmup_buffer(buffer, env, warmup_steps, max_episode_steps, num_envs=1):
         if num_envs > 1:
             rand_action = np.array([rand_action for _ in range(num_envs)])
         next_state, reward, done, info = env.step(rand_action)
-        buffer.push(state, rand_action, reward, next_state, done)
+        exp_deque.append((state, rand_action, reward, next_state, done))
+        if len(exp_deque) == exp_deque.maxlen:
+            # enough transitions to compute n-step returns
+            s, a, r, s1, d = exp_deque.popleft()
+            for i, trans in enumerate(exp_deque):
+                *_, r_i, s1, d = trans
+                r += (gamma ** (i + 1)) * r_i
+            # buffer gets n-step transition
+            buffer.push(s, a, r, s1, d)
         if num_envs > 1:
             done = done.any()
         state = next_state
@@ -283,9 +304,15 @@ def compute_td_targets(
             a_s1 = a_dist_s1.sample()
             if random_process is not None:
                 a_s1 = random_process.sample(a_s1, update_schedule=False)
-            logp_a1 = a_dist_s1.log_prob(a_s1).sum(-1, keepdim=True)
+                entropy_bonus = torch.Tensor([0.0]).to(a_s1.device)
+            else:
+                logp_a1 = a_dist_s1.log_prob(a_s1).sum(-1, keepdim=True)
+                entropy_bonus = log_alpha.exp() * logp_a1
+            logs[
+                f"td_targets/mean_entropy_bonus_{ensemble_idx}"
+            ] = entropy_bonus.mean().item()
             s1_q_pred = target_critic(s1_rep, a_s1, subset=ensemble_n)
-            val_s1 = s1_q_pred - (log_alpha.exp() * logp_a1)
+            val_s1 = s1_q_pred - (entropy_bonus)
         if popart and pop:
             # denormalize target
             val_s1 = popart(val_s1, normalized=False)
