@@ -90,7 +90,7 @@ def critic_update(
             td_error = td_target - q_pred
             critic_loss += (
                 backup_weights * replay_dict["imp_weights"] * (td_error ** 2)
-            ) / agent.num_critics
+            ) / (0.5 * agent.num_critics)
 
         if update_priorities:
             lu.adjust_priorities(logs, replay_dict, agent, buffer)
@@ -238,12 +238,7 @@ def alpha_update(
         if discrete:
             logp_a = (a_dist.probs * torch.log_softmax(a_dist.logits, dim=1)).sum(-1)
         else:
-            logp_a = (
-                a_dist.log_prob(a_dist.sample())
-                .sum(-1, keepdim=True)
-                .clamp(-100.0, 100.0)
-            )
-        # alpha_loss = -(log_alphas[i] * (logp_a + target_entropy).detach()).mean()
+            logp_a = a_dist.log_prob(a_dist.sample()).sum(-1, keepdim=True)
         alpha_loss = -(log_alphas[i].exp() * (logp_a + target_entropy).detach()).mean()
         optimizers[i].zero_grad()
         alpha_loss.backward()
@@ -310,7 +305,6 @@ def online_actor_update(
                 entropy_bonus = log_alpha.exp() * a_dist.log_prob(a).sum(
                     -1, keepdim=True
                 )
-                entropy_bonus.clamp_(-1e4, 1e4)
             # get critic values for this action
             if not use_baseline:
                 vals = critic(s_rep, a)
