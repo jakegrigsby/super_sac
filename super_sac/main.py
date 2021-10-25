@@ -196,7 +196,7 @@ def super_sac(
     )
 
     # max entropy, disabled with init_alpha = 0, alpha_lr = 0
-    init_alpha = max(init_alpha, 1e-11)
+    init_alpha = max(init_alpha, 1e-15)
     log_alphas = []
     log_alpha_optimizers = []
     for _ in range(agent.ensemble_size):

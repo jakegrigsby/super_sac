@@ -114,6 +114,7 @@ def critic_update(
     critic_optimizer.step()
     encoder_optimizer.step()
 
+    logs["losses/last_member_critic_td_error"] = td_error.mean().item()
     logs["losses/critic_overall_loss"] = critic_loss
     logs["gradients/critic_random_grad"] = lu.get_grad_norm(
         random.choice(agent.critics)
@@ -285,21 +286,23 @@ def online_actor_update(
             vals = (probs * vals).sum(1, keepdim=True)
             entropy_bonus = log_alpha.exp() * (probs * log_probs).sum(1, keepdim=True)
         else:
+            # sample an action
             a = a_dist.rsample()
+            # compute max ent term, if applicable
             if random_process is not None:
                 a = random_process.sample(a, update_schedule=False)
+                entropy_bonus = 0.0
+            else:
+                entropy_bonus = log_alpha.exp() * a_dist.log_prob(a).sum(-1, keepdim=True)
+                entropy_bonus.clamp_(-1e4, 1e4)
+            # get critic values for this action
             if not use_baseline:
                 vals = critic(s_rep, a)
                 if popart and pop:
                     vals = popart(vals)
             else:
                 vals = agent.adv_estimator(o, a, ensemble_idx=i)
-            entropy_bonus = log_alpha.exp() * a_dist.log_prob(a).sum(
-                -1, keepdim=True
-            ).clamp(-1000.0, 1000.0)
         actor_loss += -(vals - entropy_bonus).mean()
-        logs[f"losses/actor_loss_{i}"] = actor_loss.item()
-        logs[f"gradients/actor_online_grad_{i}"] = lu.get_grad_norm(actor)
     actor_loss /= len(agent.actors)
 
     actor_optimizer.zero_grad()
@@ -311,4 +314,5 @@ def online_actor_update(
     actor_optimizer.step()
 
     logs["losses/actor_online_overall_loss"] = actor_loss.item()
+    logs[f"gradients/random_actor_online_grad"] = lu.get_grad_norm(random.choice(agent.actors))
     return logs
