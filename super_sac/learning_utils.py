@@ -1,5 +1,6 @@
 import random
 import contextlib
+from collections import deque
 
 import numpy as np
 import torch
@@ -93,16 +94,20 @@ def get_grad_norm(model):
     return total_norm
 
 
-def warmup_buffer(buffer, env, warmup_steps, max_episode_steps, num_envs=1):
+def warmup_buffer(
+    buffer, env, warmup_steps, max_episode_steps, n_step, gamma, num_envs=1
+):
     # use warmp up steps to add random transitions to the buffer
     state = env.reset()
     done = False
     steps_this_ep = 0
+    exp_deque = deque([], maxlen=n_step)
     for _ in range(warmup_steps):
         if done:
             state = env.reset()
             steps_this_ep = 0
             done = False
+            exp_deque.clear()
         rand_action = env.action_space.sample()
         if not isinstance(rand_action, np.ndarray):
             rand_action = np.array(float(rand_action))
@@ -111,7 +116,15 @@ def warmup_buffer(buffer, env, warmup_steps, max_episode_steps, num_envs=1):
         if num_envs > 1:
             rand_action = np.array([rand_action for _ in range(num_envs)])
         next_state, reward, done, info = env.step(rand_action)
-        buffer.push(state, rand_action, reward, next_state, done)
+        exp_deque.append((state, rand_action, reward, next_state, done))
+        if len(exp_deque) == exp_deque.maxlen:
+            # enough transitions to compute n-step returns
+            s, a, r, s1, d = exp_deque.popleft()
+            for i, trans in enumerate(exp_deque):
+                *_, r_i, s1, d = trans
+                r += (gamma ** (i + 1)) * r_i
+            # buffer gets n-step transition
+            buffer.push(s, a, r, s1, d)
         if num_envs > 1:
             done = done.any()
         state = next_state

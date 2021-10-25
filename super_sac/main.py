@@ -5,6 +5,7 @@ import os
 from itertools import chain
 import random
 import time
+from collections import deque
 
 import numpy as np
 import tensorboardX
@@ -57,6 +58,7 @@ def super_sac(
     mlp_tau=0.005,
     encoder_tau=0.01,
     target_delay=2,
+    n_step=1,
     use_pg_update_online=True,
     use_bc_update_online=True,
     weighted_bellman_temp=20.0,
@@ -241,14 +243,17 @@ def super_sac(
     # warmup empty replay buffer
     if random_warmup_steps:
         lu.warmup_buffer(
-            buffer,
-            train_env,
-            random_warmup_steps,
-            max_episode_steps,
+            buffer=buffer,
+            env=train_env,
+            warmup_steps=random_warmup_steps,
+            max_episode_steps=max_episode_steps,
+            n_step=n_step,
+            gamma=gamma,
             num_envs=num_envs,
         )
 
-    done = True
+    done = True  # reset the env on first step
+    exp_deque = deque([], maxlen=n_step)  # holds n-step transitions
     for step in progress_bar(total_steps):
         bc_logs, actor_logs, critic_logs = {}, {}, {}
 
@@ -304,9 +309,8 @@ def super_sac(
                     state = train_env.reset()
                     steps_this_ep = 0
                     done = False
-                action, act_dist = agent.sample_action(
-                    state, from_cpu=True, num_envs=num_envs, return_dist=True
-                )
+                    exp_deque.clear()
+                action = agent.sample_action(state, from_cpu=True, num_envs=num_envs)
                 if use_exploration_process:
                     actor_logs["exploration_noise_param"] = random_process.current_scale
                     action = random_process.sample(action, update_schedule=True)
@@ -314,7 +318,7 @@ def super_sac(
                 if ignore_all_dones or (
                     infinite_bootstrap and steps_this_ep + 1 == max_episode_steps
                 ):
-                    # override done to False
+                    # override the replay buffer version of done to False
                     buffer_done = (
                         np.expand_dims(np.array([False for _ in range(num_envs)]), 1)
                         if num_envs > 1
@@ -322,7 +326,16 @@ def super_sac(
                     )
                 else:
                     buffer_done = done
-                buffer.push(state, action, reward, next_state, buffer_done)
+                # put this transition in our n-step queue
+                exp_deque.append((state, action, reward, next_state, buffer_done))
+                if len(exp_deque) == exp_deque.maxlen:
+                    # enough transitions to compute n-step returns
+                    s, a, r, s1, d = exp_deque.popleft()
+                    for i, trans in enumerate(exp_deque):
+                        *_, r_i, s1, d = trans
+                        r += (gamma ** (i + 1)) * r_i
+                    # buffer gets n-step transition
+                    buffer.push(s, a, r, s1, d)
                 if num_envs > 1:
                     done = done.any()
                 state = next_state
@@ -346,7 +359,7 @@ def super_sac(
                     encoder_optimizer=encoder_criticloss_optimizer,
                     log_alphas=log_alphas,
                     batch_size=batch_size,
-                    gamma=gamma,
+                    gamma=gamma ** n_step,
                     critic_clip=critic_clip,
                     encoder_clip=encoder_clip,
                     target_critic_ensemble_n=target_critic_ensemble_n,
