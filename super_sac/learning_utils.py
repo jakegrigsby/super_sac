@@ -67,7 +67,7 @@ class GaussianExplorationNoise:
 
 
 class EpsilonGreedyExplorationNoise:
-    def __init__(self, action_space, eps_start=1.0, eps_final=0.1, steps_annealed=1000):
+    def __init__(self, action_space, eps_start=1.0, eps_final=1e-5, steps_annealed=1000):
         assert eps_start >= eps_final
         self.action_space = action_space
         self.eps_start = eps_start

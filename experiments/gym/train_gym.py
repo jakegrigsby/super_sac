@@ -76,10 +76,6 @@ def train_gym(args):
         buffer=buffer,
         name=args.name,
         logging_method="wandb",
-        n_step=5,
-        wandb_entity=os.getenv("SSAC_WANDB_ACCOUNT"),
-        wandb_project=os.getenv("SSAC_WANDB_PROJECT"),
-        base_save_path=os.getenv("SSAC_SAVE"),
         render=args.render,
     )
 

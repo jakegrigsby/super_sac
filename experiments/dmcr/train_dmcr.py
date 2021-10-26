@@ -6,7 +6,7 @@ import dmc_remastered as dmcr
 
 import super_sac
 from super_sac import nets
-from super_sac.augmentations import AugmentationSequence, Drqv2Aug
+from super_sac.augmentations import AugmentationSequence, Drqv2Aug, ColorJitterAug
 from super_sac.wrappers import Uint8Wrapper
 
 
@@ -29,7 +29,7 @@ def train_dmcr(args):
     gin.parse_config_file(args.config)
 
     train_env, test_env = dmcr.benchmarks.classic(
-        args.domain, args.task, visual_seed=args.seed
+        args.domain, args.task, visual_seed=args.seed, frame_skip=2, frame_stack=3,
     )
     train_env = Uint8Wrapper(train_env)
     test_env = Uint8Wrapper(test_env)
@@ -51,9 +51,6 @@ def train_dmcr(args):
         name=args.name,
         # params below would ideally be in the gin file but I haven't figured that out yet
         logging_method="wandb",
-        wandb_entity=os.getenv("SSAC_WANDB_ACCOUNT"),
-        wandb_project=os.getenv("SSAC_WANDB_PROJECT"),
-        base_save_path=os.getenv("SSAC_SAVE"),
         augmenter=AugmentationSequence([Drqv2Aug(256)]),
     )
 
