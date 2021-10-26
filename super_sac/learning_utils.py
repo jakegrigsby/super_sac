@@ -32,10 +32,14 @@ class GaussianExplorationNoise:
         self.current_scale = start_scale
         self._scale_slope = (start_scale - final_scale) / steps_annealed
         self.eps = eps
+        self.act_low_torch = torch.from_numpy(action_space.low).to(device)
+        self.act_high_torch = torch.from_numpy(action_space.high).to(device)
 
-    def sample(self, action, update_schedule=False):
+    def sample(self, action, clip=None, update_schedule=False):
         if isinstance(action, np.ndarray):
             noise = self.current_scale * np.random.randn(*action.shape)
+            if clip is not None:
+                noise = np.clip(noise, -clip, clip)
             noisy_action = np.clip(
                 action + noise,
                 self.action_space.low + self.eps,
@@ -43,9 +47,15 @@ class GaussianExplorationNoise:
             )
         elif isinstance(action, torch.Tensor):
             noise = self.current_scale * torch.randn(*action.shape).to(action.device)
-            noisy_action = (action + noise).clamp(
-                torch.from_numpy(self.action_space.low).to(action.device) + self.eps,
-                torch.from_numpy(self.action_space.high).to(action.device) - self.eps,
+            if clip is not None:
+                noise = noise.clamp(-clip, clip)
+            noisy_action = action + noise
+            noisy_action_clamped = (noisy_action).clamp(
+                self.act_low_torch + self.eps, self.act_high_torch - self.eps
+            )
+            # gradient preservation trick from drqv2???
+            noisy_action = (
+                noisy_action - noisy_action.detach() + noisy_action_clamped.detach()
             )
         else:
             raise ValueError(f"Unrecognized action array type: {type(action)}")
@@ -66,7 +76,7 @@ class EpsilonGreedyExplorationNoise:
         self.current_scale = eps_start
         self._eps_slope = (eps_start - eps_final) / steps_annealed
 
-    def sample(self, action, update_schedule=False):
+    def sample(self, action, clip=None, update_schedule=False):
         if random.random() < self.current_scale:
             rand_action = np.zeros_like(action)
             for i in range(len(action)):
@@ -235,7 +245,7 @@ def filtered_bc_loss(
     if discrete:
         logp_a = dist.log_prob(a.squeeze(1)).unsqueeze(1)
     else:
-        logp_a = dist.log_prob(a).sum(-1, keepdim=True).clamp(-100.0, 100.0)
+        logp_a = dist.log_prob(a).sum(-1, keepdim=True).clamp(-1e4, 1e4)
     if filter_:
         logs[f"losses/adv_weights_mean"] = adv_weights.mean().item()
         logp_a *= adv_weights
@@ -266,7 +276,7 @@ def adjust_priorities(logs, replay_dict, agent, buffer):
     with torch.no_grad():
         random_ensemble_member = random.choice(range(agent.ensemble_size))
         adv = agent.adv_estimator(o, a, random_ensemble_member)
-    new_priorities = (F.relu(adv) + 1e-5).cpu().detach().squeeze(1).numpy()
+    new_priorities = (F.relu(adv) + 1e-4).cpu().detach().squeeze(1).numpy()
     buffer.update_priorities(priority_idxs, new_priorities)
 
 
@@ -281,6 +291,7 @@ def compute_td_targets(
     pop,
     gamma,
     random_process,
+    noise_clip,
     discrete=False,
 ):
     o, a, r, o1, d = replay_dict["primary_batch"]
@@ -303,7 +314,9 @@ def compute_td_targets(
         else:
             a_s1 = a_dist_s1.sample()
             if random_process is not None:
-                a_s1 = random_process.sample(a_s1, update_schedule=False)
+                a_s1 = random_process.sample(
+                    a_s1, clip=noise_clip, update_schedule=False
+                )
                 entropy_bonus = torch.Tensor([0.0]).to(a_s1.device)
             else:
                 logp_a1 = a_dist_s1.log_prob(a_s1).sum(-1, keepdim=True)

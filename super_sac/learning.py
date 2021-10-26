@@ -33,6 +33,7 @@ def critic_update(
     augmenter,
     encoder_lambda,
     random_process,
+    noise_clip,
     aug_mix=0.75,
     discrete=False,
     per=False,
@@ -62,6 +63,7 @@ def critic_update(
             pop=pop,
             gamma=gamma,
             random_process=random_process,
+            noise_clip=noise_clip,
             discrete=discrete,
         )
 
@@ -238,11 +240,7 @@ def alpha_update(
         if discrete:
             logp_a = (a_dist.probs * torch.log_softmax(a_dist.logits, dim=1)).sum(-1)
         else:
-            logp_a = (
-                a_dist.log_prob(a_dist.sample())
-                .sum(-1, keepdim=True)
-                .clamp(-100.0, 100.0)
-            )
+            logp_a = a_dist.log_prob(a_dist.sample()).sum(-1, keepdim=True)
         # alpha_loss = -(log_alphas[i] * (logp_a + target_entropy).detach()).mean()
         alpha_loss = -(log_alphas[i].exp() * (logp_a + target_entropy).detach()).mean()
         optimizers[i].zero_grad()
@@ -262,6 +260,7 @@ def online_actor_update(
     batch_size,
     clip,
     random_process,
+    noise_clip,
     augmenter,
     aug_mix,
     premade_replay_dicts=None,
@@ -304,13 +303,14 @@ def online_actor_update(
             a = a_dist.rsample()
             # compute max ent term, if applicable
             if random_process is not None:
-                a = random_process.sample(a, update_schedule=False)
+                # warning: turned off a as a test. TD3 doesn't do this, why does DrqV2?
+                # turned back on to test sneaky gradient feature in random process for torch arrays
+                a = random_process.sample(a, clip=noise_clip, update_schedule=False)
                 entropy_bonus = 0.0
             else:
                 entropy_bonus = log_alpha.exp() * a_dist.log_prob(a).sum(
                     -1, keepdim=True
                 )
-                entropy_bonus.clamp_(-1e4, 1e4)
             # get critic values for this action
             if not use_baseline:
                 vals = critic(s_rep, a)

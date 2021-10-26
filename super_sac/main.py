@@ -52,6 +52,7 @@ def super_sac(
     exploration_param_init=1.0,
     exploration_param_final=0.1,
     exploration_param_anneal=1_000_000,
+    exploration_update_clip=0.3,
     init_alpha=0.1,
     target_entropy_mul=1.0,
     gamma=0.99,
@@ -371,6 +372,7 @@ def super_sac(
                     aug_mix=aug_mix,
                     discrete=agent.discrete,
                     random_process=random_process,
+                    noise_clip=exploration_update_clip,
                     per=False,
                     update_priorities=step < bc_warmup_steps + num_steps_offline
                     or use_bc_update_online,
@@ -451,6 +453,7 @@ def super_sac(
                         per=False,
                         discrete=agent.discrete,
                         random_process=random_process,
+                        noise_clip=exploration_update_clip,
                         premade_replay_dicts=premade_replay_dicts
                         if _use_past_dicts
                         else None,
