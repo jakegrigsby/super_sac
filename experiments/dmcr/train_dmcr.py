@@ -6,7 +6,7 @@ import dmc_remastered as dmcr
 
 import super_sac
 from super_sac import nets
-from super_sac.augmentations import AugmentationSequence, Drqv2Aug, ColorJitterAug
+from super_sac.augmentations import AugmentationSequence, Drqv2Aug, DrqAug
 from super_sac.wrappers import Uint8Wrapper
 
 
@@ -40,7 +40,7 @@ def train_dmcr(args):
         encoder=DMCREncoder(train_env.observation_space.shape),
     )
 
-    buffer = super_sac.replay.PrioritizedReplayBuffer(size=1_000_000)
+    buffer = super_sac.replay.ReplayBuffer(size=1_000_000)
 
     # run training
     super_sac.super_sac(
@@ -49,8 +49,7 @@ def train_dmcr(args):
         test_env=test_env,
         buffer=buffer,
         name=args.name,
-        # params below would ideally be in the gin file but I haven't figured that out yet
-        logging_method="wandb",
+        logging_method=args.logging,
         augmenter=AugmentationSequence([Drqv2Aug(256)]),
     )
 
@@ -63,5 +62,6 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--steps", type=int, default=1_000_000)
     parser.add_argument("--config", type=str, required=True)
+    parser.add_argument("--logging", type=str, choices=["tensorboard", "wandb"], default="tensorboard")
     args = parser.parse_args()
     train_dmcr(args)
