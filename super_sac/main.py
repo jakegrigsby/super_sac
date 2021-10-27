@@ -27,10 +27,11 @@ def super_sac(
     train_env,
     test_env,
     # compute kwargs
+    bc_warmup_steps=0,
     num_steps_offline=1_000_000,
     num_steps_online=100_000,
-    offline_actor_updates_per_step=1,
-    online_actor_updates_per_step=1,
+    afbc_actor_updates_per_step=1,
+    pg_actor_updates_per_step=1,
     critic_updates_per_step=1,
     target_critic_ensemble_n=2,
     batch_size=512,
@@ -61,9 +62,8 @@ def super_sac(
     target_delay=2,
     n_step=1,
     use_pg_update_online=True,
-    use_bc_update_online=True,
+    use_afbc_update_online=True,
     weighted_bellman_temp=20.0,
-    bc_warmup_steps=0,
     random_warmup_steps=0,
     weight_type="softmax",
     afbc_per=True,
@@ -143,13 +143,13 @@ def super_sac(
     qprint(f"\tTD Target Critic Ensemble Size: {target_critic_ensemble_n}")
     qprint(f"\tCritic Updates per Step: {critic_updates_per_step}")
     qprint(f"\tDiscrete Actions: {agent.discrete}")
-    qprint(f"\tActor Updates per Online Step: {online_actor_updates_per_step}")
-    qprint(f"\tActor Updates per Offline Step: {offline_actor_updates_per_step}")
+    qprint(f"\tActor Updates per Online Step: {pg_actor_updates_per_step}")
+    qprint(f"\tActor Updates per Offline Step: {afbc_actor_updates_per_step}")
     qprint(f"\tQ-Value Uncertainty Exploration Bonus: {agent.ucb_bonus}")
     qprint(f"\tEncoder Lambda: {encoder_lambda}")
     qprint(f"\tActor Lambda: {actor_lambda}")
     qprint(f"\tUse PG Update Online: {use_pg_update_online}")
-    qprint(f"\tUse BC Update Online: {use_bc_update_online}")
+    qprint(f"\tUse BC Update Online: {use_afbc_update_online}")
     qprint(f"\tUse Random Exploration Noise: {use_exploration_process}")
     qprint(f"\tInit Alpha: {init_alpha}, Alpha LR: {alpha_lr}")
     qprint(f"\tAugmenter: {augmenter}")
@@ -375,7 +375,7 @@ def super_sac(
                     noise_clip=exploration_update_clip,
                     per=False,
                     update_priorities=step < bc_warmup_steps + num_steps_offline
-                    or use_bc_update_online,
+                    or use_afbc_update_online,
                 )
 
                 # move target model towards training model
@@ -390,7 +390,7 @@ def super_sac(
             critic_logs.update({"schedule/critic_update": 0.0})
 
         if (step > bc_warmup_steps and step < bc_warmup_steps + num_steps_offline) or (
-            step >= bc_warmup_steps + num_steps_offline and use_bc_update_online
+            step >= bc_warmup_steps + num_steps_offline and use_afbc_update_online
         ):
             #######################
             ## AWAC Actor Update ##
@@ -400,7 +400,7 @@ def super_sac(
                 qprint("[First Offline Actor Update]")
             if step == bc_warmup_steps + num_steps_offline:
                 qprint("[First Online Filtered BC Update]")
-            for actor_update in range(offline_actor_updates_per_step):
+            for actor_update in range(afbc_actor_updates_per_step):
                 _use_past_dicts = (
                     not afbc_per and actor_update == 0
                 ) and reuse_replay_dicts
@@ -426,9 +426,9 @@ def super_sac(
                         filter_=True,
                     )
                 )
-            actor_logs.update({"schedule/offline_actor_update": 1.0})
+            actor_logs.update({"schedule/afbc_actor_update": 1.0})
         else:
-            actor_logs.update({"schedule/offline_actor_update": 0.0})
+            actor_logs.update({"schedule/afbc_actor_update": 0.0})
 
         if step > bc_warmup_steps + num_steps_offline and use_pg_update_online:
             ######################
@@ -437,7 +437,7 @@ def super_sac(
 
             if step == bc_warmup_steps + num_steps_offline + 1:
                 qprint("[First Online Actor Update]")
-            for actor_update in range(online_actor_updates_per_step):
+            for actor_update in range(pg_actor_updates_per_step):
                 _use_past_dicts = (actor_update == 0) and reuse_replay_dicts
                 actor_logs.update(
                     learning.online_actor_update(
@@ -460,9 +460,9 @@ def super_sac(
                         use_baseline=False,
                     )
                 )
-            actor_logs.update({"schedule/online_actor_update": 1.0})
+            actor_logs.update({"schedule/pg_actor_update": 1.0})
         else:
-            actor_logs.update({"schedule/online_actor_update": 0.0})
+            actor_logs.update({"schedule/pg_actor_update": 0.0})
 
         if (
             step > bc_warmup_steps + num_steps_offline
