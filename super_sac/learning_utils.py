@@ -67,7 +67,9 @@ class GaussianExplorationNoise:
 
 
 class EpsilonGreedyExplorationNoise:
-    def __init__(self, action_space, eps_start=1.0, eps_final=1e-5, steps_annealed=1000):
+    def __init__(
+        self, action_space, eps_start=1.0, eps_final=1e-5, steps_annealed=1000
+    ):
         assert eps_start >= eps_final
         self.action_space = action_space
         self.eps_start = eps_start
@@ -312,13 +314,14 @@ def compute_td_targets(
                 1, keepdim=True
             )
         else:
-            a_s1 = a_dist_s1.sample()
             if random_process is not None:
+                a_s1 = a_dist_s1.mean
                 a_s1 = random_process.sample(
                     a_s1, clip=noise_clip, update_schedule=False
                 )
                 entropy_bonus = torch.Tensor([0.0]).to(a_s1.device)
             else:
+                a_s1 = a_dist_s1.sample()
                 logp_a1 = a_dist_s1.log_prob(a_s1).sum(-1, keepdim=True)
                 entropy_bonus = log_alpha.exp() * logp_a1
             logs[

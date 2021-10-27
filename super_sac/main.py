@@ -84,7 +84,7 @@ def super_sac(
     logging_method="tensorboard",
     wandb_entity=os.getenv("SSAC_WANDB_ACCOUNT"),
     wandb_project=os.getenv("SSAC_WANDB_PROJECT"),
-    base_save_path="./saves",
+    base_save_path=os.getenv("SSAC_SAVE"),
     name="afbc_run",
     log_to_disk=True,
     log_interval=5000,
@@ -554,6 +554,8 @@ def super_sac(
 
 
 def make_process_dirs(run_name, base_path):
+    if base_path is None:
+        base_path == "./saves"
     base_dir = os.path.join(base_path, run_name)
     i = 0
     while os.path.exists(base_dir + f"_{i}"):

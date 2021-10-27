@@ -88,7 +88,7 @@ class ReplayBufferStorage:
         )
 
 
-class ReplayBuffer:
+class _BasicReplayBuffer:
     def __init__(self, size):
         self._maxsize = size
         self._storage = None
@@ -130,9 +130,9 @@ class ReplayBuffer:
         self.push(s, a, r, s1, d)
 
 
-class PrioritizedReplayBuffer(ReplayBuffer):
+class ReplayBuffer(_BasicReplayBuffer):
     def __init__(self, size, alpha=0.6, beta=1.0):
-        super(PrioritizedReplayBuffer, self).__init__(size)
+        super(ReplayBuffer, self).__init__(size)
         assert alpha >= 0
         self.alpha = alpha
         self.beta = beta

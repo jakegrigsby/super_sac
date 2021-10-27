@@ -105,8 +105,8 @@ def critic_update(
             logs, replay_dict, agent
         )
 
-    critic_optimizer.zero_grad()
-    encoder_optimizer.zero_grad()
+    critic_optimizer.zero_grad(set_to_none=True)
+    encoder_optimizer.zero_grad(set_to_none=True)
     critic_loss.backward()
     if critic_clip:
         torch.nn.utils.clip_grad_norm_(
@@ -182,8 +182,8 @@ def offline_actor_update(
 
     loss /= agent.ensemble_size
 
-    actor_optimizer.zero_grad()
-    encoder_optimizer.zero_grad()
+    actor_optimizer.zero_grad(set_to_none=True)
+    encoder_optimizer.zero_grad(set_to_none=True)
 
     loss.backward()
 
@@ -299,15 +299,18 @@ def online_actor_update(
             vals = (probs * vals).sum(1, keepdim=True)
             entropy_bonus = log_alpha.exp() * (probs * log_probs).sum(1, keepdim=True)
         else:
-            # sample an action
-            a = a_dist.rsample()
-            # compute max ent term, if applicable
             if random_process is not None:
-                # warning: turned off a as a test. TD3 doesn't do this, why does DrqV2?
-                # turned back on to test sneaky gradient feature in random process for torch arrays
-                a = random_process.sample(a, clip=noise_clip, update_schedule=False)
-                entropy_bonus = 0.0
+                # deterministic policy
+                a_dist.scale = (
+                    torch.ones_like(a_dist.scale) * random_process.current_scale
+                )
+                a = random_process.sample(
+                    a_dist.mean, clip=noise_clip, update_schedule=False
+                )
+                entropy_bonus = torch.Tensor([0.0]).float().to(a.device)
             else:
+                # stochastic policy
+                a = a_dist.rsample()
                 entropy_bonus = log_alpha.exp() * a_dist.log_prob(a).sum(
                     -1, keepdim=True
                 )
@@ -321,16 +324,14 @@ def online_actor_update(
         actor_loss += -(vals - entropy_bonus).mean()
     actor_loss /= len(agent.actors)
 
-    actor_optimizer.zero_grad()
+    actor_optimizer.zero_grad(set_to_none=True)
     actor_loss.backward()
     if clip:
         torch.nn.utils.clip_grad_norm_(
             chain(*(actor.parameters() for actor in agent.actors)), clip
         )
-    actor_optimizer.step()
-
-    logs["losses/actor_online_overall_loss"] = actor_loss.item()
     logs[f"gradients/random_actor_online_grad"] = lu.get_grad_norm(
         random.choice(agent.actors)
     )
+    actor_optimizer.step()
     return logs
