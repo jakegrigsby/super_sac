@@ -6,4 +6,4 @@ tqdm
 opencv-python
 Pillow
 scikit-image
-
+gin-config
