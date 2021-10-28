@@ -52,7 +52,9 @@ if __name__ == "__main__":
     parser.add_argument("--task", type=str, default="walk")
     parser.add_argument("--name", type=str, default="super_sac_dmc")
     parser.add_argument("--trials", type=int, default=1)
-    parser.add_argument("--logging", type=str, choices=["tensorboard", "wandb"], default="tensorboard")
+    parser.add_argument(
+        "--logging", type=str, choices=["tensorboard", "wandb"], default="tensorboard"
+    )
     args = parser.parse_args()
     for _ in range(args.trials):
         train_dmc(args)

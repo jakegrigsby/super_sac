@@ -42,7 +42,7 @@ main.super_sac.gamma = .99
 main.super_sac.use_exploration_process = True
 main.super_sac.exploration_param_init = 1.
 main.super_sac.exploration_param_final = .1
-main.super_sac.exploration_param_anneal = 200_000
+main.super_sac.exploration_param_anneal = 500_000
 # "c" in paper hparams
 main.super_sac.exploration_update_clip = .3
 main.super_sac.init_alpha = 0
@@ -70,7 +70,7 @@ main.super_sac.eval_interval = 10_000
 main.super_sac.render = False
 
 main.super_sac.log_to_disk = True
-main.super_sac.log_interval = 1000
+main.super_sac.log_interval = 100
 main.super_sac.save_to_disk = True
 main.super_sac.save_interval = 10_000
 main.super_sac.verbosity = 1
