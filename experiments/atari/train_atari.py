@@ -38,7 +38,7 @@ def train_atari(args):
         encoder=AtariEncoder(img_shape, emb_dim=128),
     )
 
-    buffer = super_sac.replay.PrioritizedReplayBuffer(size=1_000_000)
+    buffer = super_sac.replay.ReplayBuffer(size=1_000_000)
 
     # run training
     super_sac.super_sac(
@@ -47,11 +47,8 @@ def train_atari(args):
         test_env=test_env,
         buffer=buffer,
         name=args.name,
+        logging_method=args.logging,
         augmenter=AugmentationSequence([Drqv2Aug(128)]),
-        logging_method="wandb",
-        wandb_entity=os.getenv("SSAC_WANDB_ACCOUNT"),
-        wandb_project=os.getenv("SSAC_WANDB_PROJECT"),
-        base_save_path=os.getenv("SSAC_SAVE"),
     )
 
 
@@ -63,5 +60,8 @@ if __name__ == "__main__":
     parser.add_argument("--game", type=str, default="PongNoFrameskip-v4")
     parser.add_argument("--config", type=str, required=True)
     parser.add_argument("--parallel_actors", type=int, default=1)
+    parser.add_argument(
+        "--logging", type=str, choices=["tensorboard", "wandb"], default="tensorboard"
+    )
     args = parser.parse_args()
     train_atari(args)

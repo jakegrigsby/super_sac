@@ -38,7 +38,7 @@ def train_d4rl_gym(args):
     dset = d4rl.qlearning_dataset(test_env)
     dset_size = dset["observations"].shape[0]
     # create replay buffer
-    buffer = super_sac.replay.PrioritizedReplayBuffer(size=dset_size)
+    buffer = super_sac.replay.ReplayBuffer(size=dset_size)
     buffer.load_experience(
         {"obs": dset["observations"]},
         dset["actions"],
@@ -54,10 +54,7 @@ def train_d4rl_gym(args):
         test_env=test_env,
         buffer=buffer,
         name=args.name,
-        logging_method="wandb",
-        wandb_entity=os.getenv("SSAC_WANDB_ACCOUNT"),
-        wandb_project=os.getenv("SSAC_WANDB_PROJECT"),
-        base_save_path=os.getenv("SSAC_SAVE"),
+        logging_method=args.logging,
     )
 
 
@@ -66,5 +63,6 @@ if __name__ == "__main__":
     parser.add_argument("--env", type=str, default="halfcheetah-medium-expert-v0")
     parser.add_argument("--name", type=str, default="super_sac_d4rl_gym")
     parser.add_argument("--config", type=str, required=True)
+    parser.add_argument("--logging", type=str, choices=["tensorboard", "wandb"], default="tensorboard")
     args = parser.parse_args()
     train_d4rl_gym(args)

@@ -36,7 +36,7 @@ def train_minatar(args):
         with open(args.dset, "rb") as f:
             data = pickle.load(f)
             size = len(data["rewards"])
-            buffer = super_sac.replay.PrioritizedReplayBuffer(size=size)
+            buffer = super_sac.replay.ReplayBuffer(size=size)
             print(f"Offline Dset Size: {size}")
 
             def transpose_dict(d):
@@ -55,7 +55,7 @@ def train_minatar(args):
                 np.array(data["dones"]),
             )
     else:
-        buffer = super_sac.replay.PrioritizedReplayBuffer(size=1_000_000)
+        buffer = super_sac.replay.ReplayBuffer(size=1_000_000)
 
     # run training
     super_sac.super_sac(
@@ -65,10 +65,7 @@ def train_minatar(args):
         buffer=buffer,
         name=args.name,
         random_warmup_steps=10_000 if args.dset is None else 0,
-        logging_method="wandb",
-        wandb_entity=os.getenv("SSAC_WANDB_ACCOUNT"),
-        wandb_project=os.getenv("SSAC_WANDB_PROJECT"),
-        base_save_path=os.getenv("SSAC_SAVE"),
+        logging_method=args.logging,
     )
 
 
@@ -80,5 +77,8 @@ if __name__ == "__main__":
     parser.add_argument("--parallel_train_envs", type=int, default=1)
     parser.add_argument("--dset", type=str, default=None)
     parser.add_argument("--config", type=str, required=True)
+    parser.add_argument(
+        "--logging", type=str, default="tensorboard", choices=["tensorboard", "wandb"]
+    )
     args = parser.parse_args()
     train_minatar(args)

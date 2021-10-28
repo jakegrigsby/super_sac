@@ -32,7 +32,7 @@ def train_dmc(args):
         encoder=IdentityEncoder(train_env.observation_space.shape[0]),
     )
 
-    buffer = super_sac.replay.PrioritizedReplayBuffer(size=1_000_000)
+    buffer = super_sac.replay.ReplayBuffer(size=1_000_000)
 
     # run training
     super_sac.super_sac(
@@ -41,10 +41,7 @@ def train_dmc(args):
         test_env=test_env,
         buffer=buffer,
         name=args.name,
-        logging_method="wandb",
-        wandb_entity=os.getenv("SSAC_WANDB_ACCOUNT"),
-        wandb_project=os.getenv("SSAC_WANDB_PROJECT"),
-        base_save_path=os.getenv("SSAC_SAVE"),
+        logging_method=args.logging,
     )
 
 
@@ -54,5 +51,10 @@ if __name__ == "__main__":
     parser.add_argument("--config", type=str, required=True)
     parser.add_argument("--task", type=str, default="walk")
     parser.add_argument("--name", type=str, default="super_sac_dmc")
+    parser.add_argument("--trials", type=int, default=1)
+    parser.add_argument(
+        "--logging", type=str, choices=["tensorboard", "wandb"], default="tensorboard"
+    )
     args = parser.parse_args()
-    train_dmc(args)
+    for _ in range(args.trials):
+        train_dmc(args)

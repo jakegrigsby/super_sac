@@ -5,6 +5,7 @@ import os
 from itertools import chain
 import random
 import time
+from collections import deque
 
 import numpy as np
 import tensorboardX
@@ -26,13 +27,15 @@ def super_sac(
     train_env,
     test_env,
     # compute kwargs
+    bc_warmup_steps=0,
     num_steps_offline=1_000_000,
     num_steps_online=100_000,
-    offline_actor_updates_per_step=1,
-    online_actor_updates_per_step=1,
+    afbc_actor_updates_per_step=1,
+    pg_actor_updates_per_step=1,
     critic_updates_per_step=1,
     target_critic_ensemble_n=2,
     batch_size=512,
+    reuse_replay_dicts=True,
     # optimization kwargs
     actor_lr=3e-4,
     critic_lr=3e-4,
@@ -50,16 +53,17 @@ def super_sac(
     exploration_param_init=1.0,
     exploration_param_final=0.1,
     exploration_param_anneal=1_000_000,
+    exploration_update_clip=0.3,
     init_alpha=0.1,
     target_entropy_mul=1.0,
     gamma=0.99,
     mlp_tau=0.005,
     encoder_tau=0.01,
     target_delay=2,
+    n_step=1,
     use_pg_update_online=True,
-    use_bc_update_online=True,
+    use_afbc_update_online=True,
     weighted_bellman_temp=20.0,
-    bc_warmup_steps=0,
     random_warmup_steps=0,
     weight_type="softmax",
     afbc_per=True,
@@ -80,7 +84,7 @@ def super_sac(
     logging_method="tensorboard",
     wandb_entity=os.getenv("SSAC_WANDB_ACCOUNT"),
     wandb_project=os.getenv("SSAC_WANDB_PROJECT"),
-    base_save_path="./saves",
+    base_save_path=os.getenv("SSAC_SAVE"),
     name="afbc_run",
     log_to_disk=True,
     log_interval=5000,
@@ -88,7 +92,6 @@ def super_sac(
     save_interval=5000,
     verbosity=0,
 ):
-
     def _get_parallel_envs(env):
         _env = env
         while hasattr(_env, "env"):
@@ -113,6 +116,7 @@ def super_sac(
                 set the os environment variables `SSAC_WANDB_ACCOUNT` and `SSAC_WANDB_PROJECT`, \n\
                 respectively. Super SAC will default to those values."
             import wandb
+
             wandb.init(
                 project=wandb_project, entity=wandb_entity, dir=save_dir, reinit=True
             )
@@ -139,13 +143,13 @@ def super_sac(
     qprint(f"\tTD Target Critic Ensemble Size: {target_critic_ensemble_n}")
     qprint(f"\tCritic Updates per Step: {critic_updates_per_step}")
     qprint(f"\tDiscrete Actions: {agent.discrete}")
-    qprint(f"\tActor Updates per Online Step: {online_actor_updates_per_step}")
-    qprint(f"\tActor Updates per Offline Step: {offline_actor_updates_per_step}")
+    qprint(f"\tActor Updates per Online Step: {pg_actor_updates_per_step}")
+    qprint(f"\tActor Updates per Offline Step: {afbc_actor_updates_per_step}")
     qprint(f"\tQ-Value Uncertainty Exploration Bonus: {agent.ucb_bonus}")
     qprint(f"\tEncoder Lambda: {encoder_lambda}")
     qprint(f"\tActor Lambda: {actor_lambda}")
     qprint(f"\tUse PG Update Online: {use_pg_update_online}")
-    qprint(f"\tUse BC Update Online: {use_bc_update_online}")
+    qprint(f"\tUse BC Update Online: {use_afbc_update_online}")
     qprint(f"\tUse Random Exploration Noise: {use_exploration_process}")
     qprint(f"\tInit Alpha: {init_alpha}, Alpha LR: {alpha_lr}")
     qprint(f"\tAugmenter: {augmenter}")
@@ -196,7 +200,7 @@ def super_sac(
     )
 
     # max entropy, disabled with init_alpha = 0, alpha_lr = 0
-    init_alpha = max(init_alpha, 1e-11)
+    init_alpha = max(init_alpha, 1e-15)
     log_alphas = []
     log_alpha_optimizers = []
     for _ in range(agent.ensemble_size):
@@ -240,14 +244,17 @@ def super_sac(
     # warmup empty replay buffer
     if random_warmup_steps:
         lu.warmup_buffer(
-            buffer,
-            train_env,
-            random_warmup_steps,
-            max_episode_steps,
+            buffer=buffer,
+            env=train_env,
+            warmup_steps=random_warmup_steps,
+            max_episode_steps=max_episode_steps,
+            n_step=n_step,
+            gamma=gamma,
             num_envs=num_envs,
         )
 
-    done = True
+    done = True  # reset the env on first step
+    exp_deque = deque([], maxlen=n_step)  # holds n-step transitions
     for step in progress_bar(total_steps):
         bc_logs, actor_logs, critic_logs = {}, {}, {}
 
@@ -303,9 +310,8 @@ def super_sac(
                     state = train_env.reset()
                     steps_this_ep = 0
                     done = False
-                action, act_dist = agent.sample_action(
-                    state, from_cpu=True, num_envs=num_envs, return_dist=True
-                )
+                    exp_deque.clear()
+                action = agent.sample_action(state, from_cpu=True, num_envs=num_envs)
                 if use_exploration_process:
                     actor_logs["exploration_noise_param"] = random_process.current_scale
                     action = random_process.sample(action, update_schedule=True)
@@ -313,7 +319,7 @@ def super_sac(
                 if ignore_all_dones or (
                     infinite_bootstrap and steps_this_ep + 1 == max_episode_steps
                 ):
-                    # override done to False
+                    # override the replay buffer version of done to False
                     buffer_done = (
                         np.expand_dims(np.array([False for _ in range(num_envs)]), 1)
                         if num_envs > 1
@@ -321,7 +327,16 @@ def super_sac(
                     )
                 else:
                     buffer_done = done
-                buffer.push(state, action, reward, next_state, buffer_done)
+                # put this transition in our n-step queue
+                exp_deque.append((state, action, reward, next_state, buffer_done))
+                if len(exp_deque) == exp_deque.maxlen:
+                    # enough transitions to compute n-step returns
+                    s, a, r, s1, d = exp_deque.popleft()
+                    for i, trans in enumerate(exp_deque):
+                        *_, r_i, s1, d = trans
+                        r += (gamma ** (i + 1)) * r_i
+                    # buffer gets n-step transition
+                    buffer.push(s, a, r, s1, d)
                 if num_envs > 1:
                     done = done.any()
                 state = next_state
@@ -337,31 +352,30 @@ def super_sac(
             if step == bc_warmup_steps + 1:
                 qprint("[First Critic Update]")
             for critic_update in range(critic_updates_per_step):
-                critic_logs.update(
-                    learning.critic_update(
-                        buffer=buffer,
-                        agent=agent,
-                        target_agent=target_agent,
-                        critic_optimizer=critic_optimizer,
-                        encoder_optimizer=encoder_criticloss_optimizer,
-                        log_alphas=log_alphas,
-                        batch_size=batch_size,
-                        gamma=gamma,
-                        critic_clip=critic_clip,
-                        encoder_clip=encoder_clip,
-                        target_critic_ensemble_n=target_critic_ensemble_n,
-                        weighted_bellman_temp=weighted_bellman_temp,
-                        weight_type=weight_type,
-                        pop=pop,
-                        augmenter=augmenter,
-                        encoder_lambda=encoder_lambda,
-                        aug_mix=aug_mix,
-                        discrete=agent.discrete,
-                        random_process=random_process,
-                        per=False,
-                        update_priorities=step < bc_warmup_steps + num_steps_offline
-                        or use_bc_update_online,
-                    )
+                critic_logs, premade_replay_dicts = learning.critic_update(
+                    buffer=buffer,
+                    agent=agent,
+                    target_agent=target_agent,
+                    critic_optimizer=critic_optimizer,
+                    encoder_optimizer=encoder_criticloss_optimizer,
+                    log_alphas=log_alphas,
+                    batch_size=batch_size,
+                    gamma=gamma ** n_step,
+                    critic_clip=critic_clip,
+                    encoder_clip=encoder_clip,
+                    target_critic_ensemble_n=target_critic_ensemble_n,
+                    weighted_bellman_temp=weighted_bellman_temp,
+                    weight_type=weight_type,
+                    pop=pop,
+                    augmenter=augmenter,
+                    encoder_lambda=encoder_lambda,
+                    aug_mix=aug_mix,
+                    discrete=agent.discrete,
+                    random_process=random_process,
+                    noise_clip=exploration_update_clip,
+                    per=False,
+                    update_priorities=step < bc_warmup_steps + num_steps_offline
+                    or use_afbc_update_online,
                 )
 
                 # move target model towards training model
@@ -376,7 +390,7 @@ def super_sac(
             critic_logs.update({"schedule/critic_update": 0.0})
 
         if (step > bc_warmup_steps and step < bc_warmup_steps + num_steps_offline) or (
-            step >= bc_warmup_steps + num_steps_offline and use_bc_update_online
+            step >= bc_warmup_steps + num_steps_offline and use_afbc_update_online
         ):
             #######################
             ## AWAC Actor Update ##
@@ -386,7 +400,10 @@ def super_sac(
                 qprint("[First Offline Actor Update]")
             if step == bc_warmup_steps + num_steps_offline:
                 qprint("[First Online Filtered BC Update]")
-            for actor_update in range(offline_actor_updates_per_step):
+            for actor_update in range(afbc_actor_updates_per_step):
+                _use_past_dicts = (
+                    not afbc_per and actor_update == 0
+                ) and reuse_replay_dicts
                 actor_logs.update(
                     learning.offline_actor_update(
                         buffer=buffer,
@@ -402,13 +419,16 @@ def super_sac(
                         actor_lambda=actor_lambda,
                         aug_mix=aug_mix,
                         per=afbc_per,
+                        premade_replay_dicts=premade_replay_dicts
+                        if _use_past_dicts
+                        else None,
                         discrete=agent.discrete,
                         filter_=True,
                     )
                 )
-            actor_logs.update({"schedule/offline_actor_update": 1.0})
+            actor_logs.update({"schedule/afbc_actor_update": 1.0})
         else:
-            actor_logs.update({"schedule/offline_actor_update": 0.0})
+            actor_logs.update({"schedule/afbc_actor_update": 0.0})
 
         if step > bc_warmup_steps + num_steps_offline and use_pg_update_online:
             ######################
@@ -417,7 +437,8 @@ def super_sac(
 
             if step == bc_warmup_steps + num_steps_offline + 1:
                 qprint("[First Online Actor Update]")
-            for actor_update in range(online_actor_updates_per_step):
+            for actor_update in range(pg_actor_updates_per_step):
+                _use_past_dicts = (actor_update == 0) and reuse_replay_dicts
                 actor_logs.update(
                     learning.online_actor_update(
                         buffer=buffer,
@@ -432,13 +453,16 @@ def super_sac(
                         per=False,
                         discrete=agent.discrete,
                         random_process=random_process,
-                        # use_baseline=True,
+                        noise_clip=exploration_update_clip,
+                        premade_replay_dicts=premade_replay_dicts
+                        if _use_past_dicts
+                        else None,
                         use_baseline=False,
                     )
                 )
-            actor_logs.update({"schedule/online_actor_update": 1.0})
+            actor_logs.update({"schedule/pg_actor_update": 1.0})
         else:
-            actor_logs.update({"schedule/online_actor_update": 0.0})
+            actor_logs.update({"schedule/pg_actor_update": 0.0})
 
         if (
             step > bc_warmup_steps + num_steps_offline
@@ -451,6 +475,7 @@ def super_sac(
 
             if step == bc_warmup_steps + num_steps_offline + 1:
                 qprint("[First Alpha Update]")
+            _use_past_dicts = reuse_replay_dicts
             actor_logs.update(
                 learning.alpha_update(
                     buffer=buffer,
@@ -461,6 +486,9 @@ def super_sac(
                     augmenter=augmenter,
                     aug_mix=aug_mix,
                     target_entropy=target_entropy,
+                    premade_replay_dicts=premade_replay_dicts
+                    if _use_past_dicts
+                    else None,
                     discrete=agent.discrete,
                 )
             )
@@ -472,6 +500,9 @@ def super_sac(
         ## LOGGING ##
         #############
         if (step % log_interval == 0) and log_to_disk:
+            performance_logs = {
+                "replay_buffer_total_samples": buffer.total_sample_calls
+            }
             if logging_method == "tensorboard":
                 for key, val in critic_logs.items():
                     writer.add_scalar(key, val, step)
@@ -479,10 +510,13 @@ def super_sac(
                     writer.add_scalar(key, val, step)
                 for key, val in bc_logs.items():
                     writer.add_scalar(key, val, step)
+                for key, val in performance_logs.items():
+                    writer.add_scalar(key, val, step)
             elif logging_method == "wandb":
                 wandb.log(critic_logs, step=step)
                 wandb.log(actor_logs, step=step)
                 wandb.log(bc_logs, step=step)
+                wandb.log(performance_logs, step=step)
 
         if (
             (step % eval_interval == 0) or (step == total_steps - 1)
@@ -520,6 +554,8 @@ def super_sac(
 
 
 def make_process_dirs(run_name, base_path):
+    if base_path is None:
+        base_path == "./saves"
     base_dir = os.path.join(base_path, run_name)
     i = 0
     while os.path.exists(base_dir + f"_{i}"):

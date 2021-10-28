@@ -33,6 +33,7 @@ def critic_update(
     augmenter,
     encoder_lambda,
     random_process,
+    noise_clip,
     aug_mix=0.75,
     discrete=False,
     per=False,
@@ -41,6 +42,7 @@ def critic_update(
     logs = {}
 
     critic_loss = 0.0
+    replay_dicts = []
     for i in range(agent.ensemble_size):
         replay_dict = lu.sample_move_and_augment(
             buffer=buffer,
@@ -61,6 +63,7 @@ def critic_update(
             pop=pop,
             gamma=gamma,
             random_process=random_process,
+            noise_clip=noise_clip,
             discrete=discrete,
         )
 
@@ -93,6 +96,7 @@ def critic_update(
 
         if update_priorities:
             lu.adjust_priorities(logs, replay_dict, agent, buffer)
+        replay_dicts.append(replay_dict)
 
     critic_loss = (critic_loss).mean() / (agent.ensemble_size)
 
@@ -101,8 +105,8 @@ def critic_update(
             logs, replay_dict, agent
         )
 
-    critic_optimizer.zero_grad()
-    encoder_optimizer.zero_grad()
+    critic_optimizer.zero_grad(set_to_none=True)
+    encoder_optimizer.zero_grad(set_to_none=True)
     critic_loss.backward()
     if critic_clip:
         torch.nn.utils.clip_grad_norm_(
@@ -114,13 +118,14 @@ def critic_update(
     critic_optimizer.step()
     encoder_optimizer.step()
 
+    logs["losses/last_member_critic_td_error"] = td_error.mean().item()
     logs["losses/critic_overall_loss"] = critic_loss
     logs["gradients/critic_random_grad"] = lu.get_grad_norm(
         random.choice(agent.critics)
     )
     logs["gradients/encoder_criticloss_grad_norm"] = lu.get_grad_norm(agent.encoder)
 
-    return logs
+    return logs, replay_dicts
 
 
 def offline_actor_update(
@@ -135,6 +140,7 @@ def offline_actor_update(
     augmenter,
     actor_lambda,
     aug_mix,
+    premade_replay_dicts=None,
     per=True,
     discrete=False,
     filter_=True,
@@ -144,13 +150,16 @@ def offline_actor_update(
     # build loss function
     loss = 0.0
     for ensemble_idx in range(agent.ensemble_size):
-        replay_dict = lu.sample_move_and_augment(
-            buffer=buffer,
-            batch_size=batch_size,
-            augmenter=augmenter,
-            aug_mix=aug_mix,
-            per=per,
-        )
+        if premade_replay_dicts is not None:
+            replay_dict = premade_replay_dicts[ensemble_idx]
+        else:
+            replay_dict = lu.sample_move_and_augment(
+                buffer=buffer,
+                batch_size=batch_size,
+                augmenter=augmenter,
+                aug_mix=aug_mix,
+                per=per,
+            )
         loss += lu.filtered_bc_loss(
             logs=logs,
             replay_dict=replay_dict,
@@ -173,8 +182,8 @@ def offline_actor_update(
 
     loss /= agent.ensemble_size
 
-    actor_optimizer.zero_grad()
-    encoder_optimizer.zero_grad()
+    actor_optimizer.zero_grad(set_to_none=True)
+    encoder_optimizer.zero_grad(set_to_none=True)
 
     loss.backward()
 
@@ -207,17 +216,21 @@ def alpha_update(
     augmenter,
     aug_mix,
     target_entropy,
+    premade_replay_dicts,
     discrete,
 ):
     logs = {}
     for i in range(agent.ensemble_size):
-        replay_dict = lu.sample_move_and_augment(
-            buffer=buffer,
-            batch_size=batch_size,
-            augmenter=augmenter,
-            per=False,
-            aug_mix=aug_mix,
-        )
+        if premade_replay_dicts is not None:
+            replay_dict = premade_replay_dicts[i]
+        else:
+            replay_dict = lu.sample_move_and_augment(
+                buffer=buffer,
+                batch_size=batch_size,
+                augmenter=augmenter,
+                per=False,
+                aug_mix=aug_mix,
+            )
         o, *_ = replay_dict["primary_batch"]
 
         with torch.no_grad():
@@ -227,12 +240,8 @@ def alpha_update(
         if discrete:
             logp_a = (a_dist.probs * torch.log_softmax(a_dist.logits, dim=1)).sum(-1)
         else:
-            logp_a = (
-                a_dist.log_prob(a_dist.sample())
-                .sum(-1, keepdim=True)
-                .clamp(-100.0, 100.0)
-            )
-        #alpha_loss = -(log_alphas[i] * (logp_a + target_entropy).detach()).mean()
+            logp_a = a_dist.log_prob(a_dist.sample()).sum(-1, keepdim=True)
+        # alpha_loss = -(log_alphas[i] * (logp_a + target_entropy).detach()).mean()
         alpha_loss = -(log_alphas[i].exp() * (logp_a + target_entropy).detach()).mean()
         optimizers[i].zero_grad()
         alpha_loss.backward()
@@ -251,8 +260,10 @@ def online_actor_update(
     batch_size,
     clip,
     random_process,
+    noise_clip,
     augmenter,
     aug_mix,
+    premade_replay_dicts=None,
     per=False,
     discrete=False,
     use_baseline=False,
@@ -263,13 +274,16 @@ def online_actor_update(
     for i, ((actor, critic), popart, log_alpha) in enumerate(
         zip(agent.ensemble, agent.popart, log_alphas)
     ):
-        replay_dict = lu.sample_move_and_augment(
-            buffer=buffer,
-            batch_size=batch_size,
-            augmenter=augmenter,
-            aug_mix=aug_mix,
-            per=per,
-        )
+        if premade_replay_dicts is not None:
+            replay_dict = premade_replay_dicts[i]
+        else:
+            replay_dict = lu.sample_move_and_augment(
+                buffer=buffer,
+                batch_size=batch_size,
+                augmenter=augmenter,
+                aug_mix=aug_mix,
+                per=per,
+            )
         o, *_ = replay_dict["primary_batch"]
         with torch.no_grad():
             # actor gradients aren't used to train the encoder (pixel SAC trick)
@@ -287,28 +301,31 @@ def online_actor_update(
         else:
             a = a_dist.rsample()
             if random_process is not None:
-                a = random_process.sample(a, update_schedule=False)
+                a = random_process.sample(a, clip=noise_clip, update_schedule=False)
+                entropy_bonus = torch.Tensor([0.0]).to(a.device).detach()
+            else:
+                entropy_bonus = log_alpha.exp() * a_dist.log_prob(a).sum(
+                    -1, keepdim=True
+                )
+            # get critic values for this action
             if not use_baseline:
                 vals = critic(s_rep, a)
                 if popart and pop:
                     vals = popart(vals)
             else:
                 vals = agent.adv_estimator(o, a, ensemble_idx=i)
-            entropy_bonus = log_alpha.exp() * a_dist.log_prob(a).sum(
-                -1, keepdim=True
-            ).clamp(-1000.0, 1000.0)
-        actor_loss += -(vals - entropy_bonus).mean()
-        logs[f"losses/actor_loss_{i}"] = actor_loss.item()
-        logs[f"gradients/actor_online_grad_{i}"] = lu.get_grad_norm(actor)
-    actor_loss /= len(agent.actors)
+        actor_loss += (vals - entropy_bonus).mean()
+    actor_loss = -actor_loss / len(agent.actors)
 
-    actor_optimizer.zero_grad()
+    actor_optimizer.zero_grad(set_to_none=True)
     actor_loss.backward()
     if clip:
         torch.nn.utils.clip_grad_norm_(
             chain(*(actor.parameters() for actor in agent.actors)), clip
         )
     actor_optimizer.step()
-
-    logs["losses/actor_online_overall_loss"] = actor_loss.item()
+    logs[f"gradients/random_actor_online_grad"] = lu.get_grad_norm(
+        random.choice(agent.actors)
+    )
+    logs["losses/actor_pg_loss"] = actor_loss.item()
     return logs

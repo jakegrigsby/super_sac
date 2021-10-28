@@ -88,7 +88,7 @@ class ReplayBufferStorage:
         )
 
 
-class ReplayBuffer:
+class _BasicReplayBuffer:
     def __init__(self, size):
         self._maxsize = size
         self._storage = None
@@ -130,9 +130,9 @@ class ReplayBuffer:
         self.push(s, a, r, s1, d)
 
 
-class PrioritizedReplayBuffer(ReplayBuffer):
+class ReplayBuffer(_BasicReplayBuffer):
     def __init__(self, size, alpha=0.6, beta=1.0):
-        super(PrioritizedReplayBuffer, self).__init__(size)
+        super(ReplayBuffer, self).__init__(size)
         assert alpha >= 0
         self.alpha = alpha
         self.beta = beta
@@ -144,6 +144,7 @@ class PrioritizedReplayBuffer(ReplayBuffer):
         self._it_sum = SumSegmentTree(it_capacity)
         self._it_min = MinSegmentTree(it_capacity)
         self._max_priority = 1.0
+        self.total_sample_calls = 0
 
     def push(self, s, a, r, s_1, d, priorities=None):
         R = super().push(s, a, r, s_1, d)
@@ -160,6 +161,7 @@ class PrioritizedReplayBuffer(ReplayBuffer):
         return idx
 
     def sample(self, batch_size):
+        self.total_sample_calls += 1
         idxes = self._sample_proportional(batch_size)
         p_min = self._it_min.min() / self._it_sum.sum()
         max_weight = (p_min * len(self._storage)) ** (-self.beta)
@@ -168,6 +170,7 @@ class PrioritizedReplayBuffer(ReplayBuffer):
         return self._storage[idxes], torch.from_numpy(weights), idxes
 
     def sample_uniform(self, batch_size):
+        self.total_sample_calls += 1
         return super().sample(batch_size, get_idxs=True)
 
     def update_priorities(self, idxes, priorities):
