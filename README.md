@@ -93,7 +93,7 @@ Train a standard SAC-Discrete agent on the "Breakout"-style game with:
 python train_minatar.py --config basic_online.gin --game breakout --name breakout_minatar_run
 ``` 
 
-A very similar formula (with a larger CNN) applies to real Atari games as well (`experiments/atari`). We can also learn from pixels in continuous action environments like the DeepMind Control Suite. This is much more complicated in general, and good performance relies on data augmentation and implementation tricks from RAD, DrQ, and DrQv2. Please refer to `experiments/dmcr` for hyperparameter details.
+A very similar formula (with a larger CNN) applies to real Atari games as well (`experiments/atari`). We can also learn from pixels in continuous action environments like the DeepMind Control Suite. This is much more complicated in general, and good performance relies on data augmentation and implementation tricks from RAD, DrQ, and DrQv2. Please refer to `experiments/dmc/drqv2.gin` for hyperparameter details.
 
 #### Behavioral Cloning and Offline RL
 Super SAC supports both offline and online learning. While the online updates are based on off-policy policy gradients (PG) as in DDPG/TD3/SAC, the offline updates are based on a blend of AWAC and CRR. The actor is trained to maximize the probability of outputting actions that have greater value than the current policy - as determined by the critic network(s) (nicknamed in the code "Advantage-Filtered Behavioral Cloning" **[[AFBC]((https://arxiv.org/abs/2110.04698))]**). Behavioral Cloning uses the same method but does not filter any samples. The particular implementation details, numerical stability fixes, and advantage-weighted replay buffer trick included here create a significant improvement over most published results. See `experiments/d4rl` for examples on the **[[D4RL](https://arxiv.org/abs/2004.07219)]** offline benchmark. Offline learning works in all domains and with more complicated `Encoder` architectures.
@@ -149,7 +149,7 @@ Please refer to the links at the top of the README for the arXiv pages of all th
 #### Required Args:
 **`agent`** : `agent.Agent` : Agent object (see above).
 
-**`buffer`** : `replay.ReplayBuffer` : Data replay buffer. See `examples/` for how to build and pre-load a buffer with offline data. Note that we implement prioritized experience replay even if prioritized sampling isn't used. 
+**`buffer`** : `replay.ReplayBuffer` : Data replay buffer. See `experiments/` for how to build and pre-load a buffer with offline data. Note that we implement prioritized experience replay even if prioritized sampling isn't used. 
 
 **`train_env`**, **`test_env`** : `gym.Env` : The gym-style environment interface. All environments need to have dictionary observations. If that isn't already true for your env, see `wrappers.SimpleGymWrapper` for typical float32 state-based gym envs and `wrappers.Uint8Wrapper` for pixel-based envs. Both turn the observation into a dictionary of `{'obs' : obs}` that can be processed by a `nets.Encoder`. The `experiments/` training scripts have several examples.
 
@@ -175,9 +175,9 @@ Please refer to the links at the top of the README for the arXiv pages of all th
 
 **`ignore_all_dones`** : `bool` : Manually override every `done` signal from the environment to False. This is useful when the env terminates for arbitrary reasons in an unpredictable amount of time that cannot be covered by `infinite_bootstrap`. This does not apply to most traditional benchmarks.
 
-**`max_episode_steps`** : `int` : Maximum steps per training and evaluation episode. This is pretty arbitrary unless the env has an explicit time limit, in which case this should be set <=  that time limit... possibly with `infinite_bootstrap = True`.
+**`max_episode_steps`** : `int` : Maximum steps per training and evaluation episode. This is arbitrary unless the env has an explicit time limit, in which case this should be set <=  that time limit... possibly with `infinite_bootstrap = True`.
 
-*Helpful information about when each kind of update is being performed can be found in the `scheduling/` section of the log files.*
+*Helpful debugging information about when each kind of update is being performed can be found in the `scheduling/` section of the log files.*
 
 #### Optimization Params
 **`batch_size`** : `int` : Batch size used in all learning updates.
@@ -225,7 +225,7 @@ Please refer to the links at the top of the README for the arXiv pages of all th
 
 **`afbc_per`** : `bool` : Enable effective-batch-size correction trick during `learning.offline_actor_update` calls. This samples from the buffer according to previously estimated advantage, making it more likely that we will sample actions that will not be masked by the behavioral cloning filter. Improves stability and sample efficiency by more efficiently using the majority of each batch. Refer to [this paper](https://arxiv.org/abs/2110.04698) for details. Not relevant when doing pure PG online learning.
 
-**`augmenter`** : `augmentations.AugmentationSequence or None` : None disables data augmentation. See `examples/dmcr/train_dmcr.py` for an example of image-based augmentation. Augmentation is implemented similar to RAD where any any randomness is shared across both state  and next_state. Multiple augmentations can be chained together (see `augmentations.py`).
+**`augmenter`** : `augmentations.AugmentationSequence or None` : None disables data augmentation. See `experiments/dmc/train_dmc_from_pixels.py` for an example of image-based augmentation. Augmentation is implemented similar to RAD where any any randomness is shared across both state  and next_state. Multiple augmentations can be chained together (see `augmentations.py`).
 
 **`encoder_lambda`** : `float` : Coefficient for encoder augmentation-invariance regularization loss. See `learning_utils.encoder_invariance_constraint`.
 
