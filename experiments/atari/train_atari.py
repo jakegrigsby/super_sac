@@ -3,6 +3,7 @@ import os
 
 import super_sac
 from super_sac import nets
+from super_sac.augmentations import AugmentationSequence, Drqv2Aug
 
 
 class AtariEncoder(nets.Encoder):
@@ -47,6 +48,7 @@ def train_atari(args):
         buffer=buffer,
         name=args.name,
         logging_method=args.logging,
+        augmenter=AugmentationSequence([Drqv2Aug(128)]),
     )
 
 
@@ -58,6 +60,8 @@ if __name__ == "__main__":
     parser.add_argument("--game", type=str, default="PongNoFrameskip-v4")
     parser.add_argument("--config", type=str, required=True)
     parser.add_argument("--parallel_actors", type=int, default=1)
-    parser.add_argument("--logging", type=str, choices=["tensorboard", "wandb"], default="tensorboard")
+    parser.add_argument(
+        "--logging", type=str, choices=["tensorboard", "wandb"], default="tensorboard"
+    )
     args = parser.parse_args()
     train_atari(args)

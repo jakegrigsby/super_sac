@@ -60,7 +60,7 @@ class BigPixelEncoder(nn.Module):
         # image should be in [0, 255] (was probably uint8 but is now float)
         # shift to [-.5, .5]
         obs /= 255.0
-        obs -= .5
+        obs -= 0.5
         x = F.relu(self.conv1(obs))
         x = F.relu(self.conv2(x))
         x = F.relu(self.conv3(x))

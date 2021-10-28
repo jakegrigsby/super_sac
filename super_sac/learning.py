@@ -314,8 +314,8 @@ def online_actor_update(
                     vals = popart(vals)
             else:
                 vals = agent.adv_estimator(o, a, ensemble_idx=i)
-        actor_loss += vals - entropy_bonus
-    actor_loss = -actor_loss.mean() / len(agent.actors)
+        actor_loss += (vals - entropy_bonus).mean()
+    actor_loss = -actor_loss / len(agent.actors)
 
     actor_optimizer.zero_grad(set_to_none=True)
     actor_loss.backward()
@@ -323,8 +323,9 @@ def online_actor_update(
         torch.nn.utils.clip_grad_norm_(
             chain(*(actor.parameters() for actor in agent.actors)), clip
         )
+    actor_optimizer.step()
     logs[f"gradients/random_actor_online_grad"] = lu.get_grad_norm(
         random.choice(agent.actors)
     )
-    actor_optimizer.step()
+    logs["losses/actor_pg_loss"] = actor_loss.item()
     return logs
