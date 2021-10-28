@@ -259,5 +259,4 @@ Please refer to the links at the top of the README for the arXiv pages of all th
 
 **`save_interval`** : `int` : How often (in full training steps) to save network weights.
 
-**`verbosity`** : `int` : verbosity > 0 will print a progress bar and summarize key hparams before training begins. This helps catch hparam mistakes early.
-
+**`verbosity`** : `int` : verbosity > 0 will print a progress bar and summarize key hparams before training begins. This helps catch hparam mistakes early
