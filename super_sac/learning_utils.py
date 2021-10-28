@@ -22,7 +22,7 @@ class GaussianExplorationNoise:
         start_scale=1.0,
         final_scale=0.1,
         steps_annealed=1000,
-        eps=0.01,
+        eps=1e-6,
     ):
         assert start_scale >= final_scale
         self.action_space = action_space
@@ -314,19 +314,15 @@ def compute_td_targets(
                 1, keepdim=True
             )
         else:
+            a_s1 = a_dist_s1.sample()
             if random_process is not None:
-                a_s1 = a_dist_s1.mean
                 a_s1 = random_process.sample(
                     a_s1, clip=noise_clip, update_schedule=False
                 )
                 entropy_bonus = torch.Tensor([0.0]).to(a_s1.device)
             else:
-                a_s1 = a_dist_s1.sample()
                 logp_a1 = a_dist_s1.log_prob(a_s1).sum(-1, keepdim=True)
                 entropy_bonus = log_alpha.exp() * logp_a1
-            logs[
-                f"td_targets/mean_entropy_bonus_{ensemble_idx}"
-            ] = entropy_bonus.mean().item()
             s1_q_pred = target_critic(s1_rep, a_s1, subset=ensemble_n)
             val_s1 = s1_q_pred - (entropy_bonus)
         if popart and pop:

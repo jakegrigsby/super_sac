@@ -299,18 +299,11 @@ def online_actor_update(
             vals = (probs * vals).sum(1, keepdim=True)
             entropy_bonus = log_alpha.exp() * (probs * log_probs).sum(1, keepdim=True)
         else:
+            a = a_dist.rsample()
             if random_process is not None:
-                # deterministic policy
-                a_dist.scale = (
-                    torch.ones_like(a_dist.scale) * random_process.current_scale
-                )
-                a = random_process.sample(
-                    a_dist.mean, clip=noise_clip, update_schedule=False
-                )
-                entropy_bonus = torch.Tensor([0.0]).float().to(a.device)
+                a = random_process.sample(a, clip=noise_clip, update_schedule=False)
+                entropy_bonus = torch.Tensor([0.0]).to(a.device).detach()
             else:
-                # stochastic policy
-                a = a_dist.rsample()
                 entropy_bonus = log_alpha.exp() * a_dist.log_prob(a).sum(
                     -1, keepdim=True
                 )
@@ -321,8 +314,8 @@ def online_actor_update(
                     vals = popart(vals)
             else:
                 vals = agent.adv_estimator(o, a, ensemble_idx=i)
-        actor_loss += -(vals - entropy_bonus).mean()
-    actor_loss /= len(agent.actors)
+        actor_loss += vals - entropy_bonus
+    actor_loss = -actor_loss.mean() / len(agent.actors)
 
     actor_optimizer.zero_grad(set_to_none=True)
     actor_loss.backward()
