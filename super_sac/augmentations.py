@@ -219,7 +219,7 @@ class Drqv2Aug:
     Code is based (heavily) on https://github.com/facebookresearch/drqv2/blob/main/drqv2.py.
     """
 
-    def __init__(self, batch_size, pad=4, noise=True, *_args, **kwargs):
+    def __init__(self, batch_size, pad=4, noise=False, *_args, **kwargs):
         self.batch_size = batch_size
         self.pad = pad
         self.change_randomization_params()

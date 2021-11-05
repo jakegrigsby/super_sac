@@ -57,11 +57,8 @@ class BigPixelEncoder(nn.Module):
         self.embedding_dim = out_dim
 
     def forward(self, obs):
-        # image should be in [0, 255] (was probably uint8 but is now float)
-        # shift to [-.5, .5]
-        obs /= 255.0
-        obs -= 0.5
-        x = F.relu(self.conv1(obs))
+        img = (obs / 255.0) - .5
+        x = F.relu(self.conv1(img))
         x = F.relu(self.conv2(x))
         x = F.relu(self.conv3(x))
         x = F.relu(self.conv4(x))
@@ -97,8 +94,8 @@ class SmallPixelEncoder(nn.Module):
         self.embedding_dim = out_dim
 
     def forward(self, obs):
-        obs /= 255.0
-        x = F.relu(self.conv1(obs))
+        img = obs / 255.0
+        x = F.relu(self.conv1(img))
         x = F.relu(self.conv2(x))
         x = F.relu(self.conv3(x))
         x = x.view(x.size(0), -1)
