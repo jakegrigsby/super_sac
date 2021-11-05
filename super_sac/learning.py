@@ -92,21 +92,19 @@ def critic_update(
             td_error = td_target - q_pred
             critic_loss += (
                 backup_weights * replay_dict["imp_weights"] * (td_error ** 2)
-            ) / agent.num_critics
+            ).mean()
 
-        if update_priorities:
-            lu.adjust_priorities(logs, replay_dict, agent, buffer)
         replay_dicts.append(replay_dict)
 
-    critic_loss = (critic_loss).mean() / (agent.ensemble_size)
+    critic_loss /= (agent.ensemble_size * agent.num_critics)
 
     if encoder_lambda:
         critic_loss += encoder_lambda * lu.encoder_invariance_constraint(
             logs, replay_dict, agent
         )
 
-    critic_optimizer.zero_grad(set_to_none=True)
-    encoder_optimizer.zero_grad(set_to_none=True)
+    encoder_optimizer.zero_grad()
+    critic_optimizer.zero_grad()
     critic_loss.backward()
     if critic_clip:
         torch.nn.utils.clip_grad_norm_(
@@ -115,8 +113,8 @@ def critic_update(
         )
     if encoder_clip:
         torch.nn.utils.clip_grad_norm_(agent.encoder.parameters(), encoder_clip)
-    critic_optimizer.step()
     encoder_optimizer.step()
+    critic_optimizer.step()
 
     logs["losses/last_member_critic_td_error"] = td_error.mean().item()
     logs["losses/critic_overall_loss"] = critic_loss
@@ -125,6 +123,8 @@ def critic_update(
     )
     logs["gradients/encoder_criticloss_grad_norm"] = lu.get_grad_norm(agent.encoder)
 
+    if update_priorities:
+        lu.adjust_priorities(logs, replay_dict, agent, buffer)
     return logs, replay_dicts
 
 
@@ -177,13 +177,10 @@ def offline_actor_update(
                 ensemble_idx=ensemble_idx,
             )
 
-        if per:
-            lu.adjust_priorities(logs, replay_dict, agent, buffer)
-
     loss /= agent.ensemble_size
 
-    actor_optimizer.zero_grad(set_to_none=True)
-    encoder_optimizer.zero_grad(set_to_none=True)
+    actor_optimizer.zero_grad()
+    encoder_optimizer.zero_grad()
 
     loss.backward()
 
@@ -204,6 +201,8 @@ def offline_actor_update(
     logs["gradients/encoder_offline_actorloss_grad_norm"] = lu.get_grad_norm(
         agent.encoder
     )
+    if per:
+        lu.adjust_priorities(logs, replay_dict, agent, buffer)
     return logs
 
 
@@ -241,8 +240,8 @@ def alpha_update(
             logp_a = (a_dist.probs * torch.log_softmax(a_dist.logits, dim=1)).sum(-1)
         else:
             logp_a = a_dist.log_prob(a_dist.sample()).sum(-1, keepdim=True)
-        # alpha_loss = -(log_alphas[i] * (logp_a + target_entropy).detach()).mean()
-        alpha_loss = -(log_alphas[i].exp() * (logp_a + target_entropy).detach()).mean()
+        alpha_loss = -(log_alphas[i] * (logp_a + target_entropy).detach()).mean()
+       # alpha_loss = -(log_alphas[i].exp() * (logp_a + target_entropy).detach()).mean()
         optimizers[i].zero_grad()
         alpha_loss.backward()
         optimizers[i].step()
@@ -317,7 +316,7 @@ def online_actor_update(
         actor_loss += (vals - entropy_bonus).mean()
     actor_loss = -actor_loss / len(agent.actors)
 
-    actor_optimizer.zero_grad(set_to_none=True)
+    actor_optimizer.zero_grad()
     actor_loss.backward()
     if clip:
         torch.nn.utils.clip_grad_norm_(

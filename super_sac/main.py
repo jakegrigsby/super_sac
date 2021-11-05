@@ -390,7 +390,7 @@ def super_sac(
             critic_logs.update({"schedule/critic_update": 0.0})
 
         if (step > bc_warmup_steps and step < bc_warmup_steps + num_steps_offline) or (
-            step >= bc_warmup_steps + num_steps_offline and use_afbc_update_online
+            step >= bc_warmup_steps + 1 + num_steps_offline and use_afbc_update_online
         ):
             #######################
             ## AWAC Actor Update ##

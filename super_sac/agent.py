@@ -272,7 +272,7 @@ class Agent:
                 # otherwise pick an action from one of the actors
                 act_dist = random.choice(self.actors)(state_rep)
                 act = act_dist.sample()
-                if self.discrete and num_envs > 1:
+                if self.discrete:
                     act = act.unsqueeze(-1)
         if from_cpu:
             act = self._process_act(act, num_envs)

@@ -80,9 +80,7 @@ class EpsilonGreedyExplorationNoise:
 
     def sample(self, action, clip=None, update_schedule=False):
         if random.random() < self.current_scale:
-            rand_action = np.zeros_like(action)
-            for i in range(len(action)):
-                rand_action[i] = self.action_space.sample()
+            rand_action = np.random.randint(0, self.action_space.n, size=action.shape, dtype=action.dtype)
             action = rand_action
         if update_schedule:
             self.current_scale = max(
@@ -245,9 +243,11 @@ def filtered_bc_loss(
         s_rep = agent.encoder(o)
     dist = agent.actors[ensemble_idx](s_rep)
     if discrete:
+        #logp_a = dist.log_prob(a.squeeze(1)).unsqueeze(1).clamp(-1e4, 1e4)
         logp_a = dist.log_prob(a.squeeze(1)).unsqueeze(1)
     else:
-        logp_a = dist.log_prob(a).sum(-1, keepdim=True).clamp(-1e4, 1e4)
+        #logp_a = dist.log_prob(a).sum(-1, keepdim=True).clamp(-1e4, 1e4)
+        logp_a = dist.log_prob(a).sum(-1, keepdim=True)
     if filter_:
         logs[f"losses/adv_weights_mean"] = adv_weights.mean().item()
         logp_a *= adv_weights
