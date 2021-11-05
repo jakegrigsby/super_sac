@@ -110,7 +110,7 @@ def super_sac(
     if log_to_disk:
         if logging_method == "tensorboard":
             writer = tensorboardX.SummaryWriter(save_dir)
-            writer.add_hparams(hparams_config)
+            writer.add_hparams(hparams_config, {})
         elif logging_method == "wandb":
             assert (
                 wandb_project is not None and wandb_entity is not None
