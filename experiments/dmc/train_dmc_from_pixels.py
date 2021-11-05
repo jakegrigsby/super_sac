@@ -1,8 +1,10 @@
 import argparse
 import gin
 import os
+import pickle
 
 import dmc2gym
+import numpy as np
 
 import super_sac
 from super_sac import nets
@@ -58,6 +60,22 @@ def train_dmc_from_pixels(args):
     )
 
     buffer = super_sac.replay.ReplayBuffer(size=1_000_000)
+    if args.offline_data is not None:
+        with open(args.offline_data, "rb") as f:
+            data = pickle.load(f)
+            size = len(data["rewards"])
+            print(f"Offline Dset Size: {size}")
+
+            def cvt_dict(d):
+                return {k:np.array(v).astype(np.uint8) for k, v in d.items()}
+
+            buffer.load_experience(
+                cvt_dict(data["states"]),
+                np.array(data["actions"]),
+                np.array(data["rewards"]),
+                cvt_dict(data["next_states"]),
+                np.array(data["dones"]),
+            )
 
     # run training
     super_sac.super_sac(
@@ -79,6 +97,7 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--steps", type=int, default=1_000_000)
     parser.add_argument("--config", type=str, required=True)
+    parser.add_argument("--offline_data", type=str, default=None)
     parser.add_argument(
         "--logging", type=str, choices=["tensorboard", "wandb"], default="tensorboard"
     )
