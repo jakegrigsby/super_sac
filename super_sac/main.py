@@ -88,6 +88,7 @@ def super_sac(
     name="afbc_run",
     log_to_disk=True,
     log_interval=5000,
+    hparams_config={},
     save_to_disk=True,
     save_interval=5000,
     verbosity=0,
@@ -109,6 +110,7 @@ def super_sac(
     if log_to_disk:
         if logging_method == "tensorboard":
             writer = tensorboardX.SummaryWriter(save_dir)
+            writer.add_hparams(hparams_config)
         elif logging_method == "wandb":
             assert (
                 wandb_project is not None and wandb_entity is not None
@@ -121,6 +123,8 @@ def super_sac(
                 project=wandb_project, entity=wandb_entity, dir=save_dir, reinit=True
             )
             wandb.run.name = name
+            wandb.config.update(hparams_config)
+            wandb.run.save()
 
     if augmenter is None:
         augmenter = augmentations.AugmentationSequence(
