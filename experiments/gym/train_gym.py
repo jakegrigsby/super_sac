@@ -3,6 +3,8 @@ import os
 import gin
 
 import gym
+from torch import nn
+import torch.nn.functional as F
 
 import pybullet
 import pybullet_envs
@@ -29,6 +31,22 @@ class IdentityEncoder(super_sac.nets.Encoder):
         return obs_dict["obs"]
 
 
+class SharedEncoder(super_sac.nets.Encoder):
+    def __init__(self, dim):
+        super().__init__()
+        self.fc0 = nn.Linear(dim, 128)
+        self.fc1 = nn.Linear(128, dim)
+        self._dim = dim
+
+    @property
+    def embedding_dim(self):
+        return self._dim
+
+    def forward(self, obs_dict):
+        x = F.relu(self.fc0(obs_dict["obs"]))
+        x = F.relu(self.fc1(x))
+        return x
+
 def train_gym(args):
     gin.parse_config_file(args.config)
 
@@ -50,10 +68,16 @@ def train_gym(args):
 
     act_space_size = train_env.action_space.n if discrete else train_env.action_space.shape[0]
 
+    dim = train_env.observation_space.shape[0]
+    if args.shared_encoder:
+        encoder = SharedEncoder(dim)
+    else:
+        encoder = IdentityEncoder(dim)
+
     # create agent
     agent = super_sac.Agent(
         act_space_size=act_space_size,
-        encoder=IdentityEncoder(train_env.observation_space.shape[0]),
+        encoder=encoder,
     )
 
     buffer = super_sac.replay.ReplayBuffer(size=1_000_000)
@@ -80,5 +104,6 @@ if __name__ == "__main__":
     parser.add_argument("--config", type=str, required=True)
     parser.add_argument("--parallel_envs", type=int, default=1)
     parser.add_argument("--logging", type=str, choices=["tensorboard", "wandb"], default="tensorboard")
+    parser.add_argument("--shared_encoder", action="store_true")
     args = parser.parse_args()
     train_gym(args)
