@@ -95,8 +95,11 @@ class DiscreteActor(nn.Module):
     def forward(self, state):
         x = F.relu(self.fc1(state))
         x = F.relu(self.fc2(x))
-        act_p = F.softmax(self.act_p(x), dim=-1)
-        dist = pyd.categorical.Categorical(act_p)
+        # numerical stability improvement??
+        #act_p = F.softmax(self.act_p(x), dim=-1)
+        #dist = pyd.categorical.Categorical(probs=act_p)
+        act_p = self.act_p(x)
+        dist = pyd.categorical.Categorical(logits=act_p)
         return dist
 
 
