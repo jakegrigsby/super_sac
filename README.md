@@ -38,7 +38,7 @@ python train_gym.py --env Pendulumv-v0 --config sac.gin --name SAC_Pendulum
 The `train_gym` script loads the hyperparameters corresponding to each algorithm from their `.gin` configuration file. The key differences between them are explained with brief comments. An exhaustive explanation of each hyperparameter option is provided at the bottom of this page.
 
 #### Saving and Logging
-By default, data is saved in a subdirectory called `.saves/name_number`, where `name` is the name argument that was passed (e.g., "DDPG_Pendulum") and `number` is a counter that increments to keep from overriding past trials with the same name. You can change the save location by setting the `SSAC_SAVE` environment variable (`export SSAC_SAVE=/somewhere/with/more/disk/space`). 
+By default, data is saved in a subdirectory called `./saves/name_number`, where `name` is the name argument that was passed (e.g., "DDPG_Pendulum") and `number` is a counter that increments to keep from overriding past trials with the same name. You can change the save location by setting the `SSAC_SAVE` environment variable (`export SSAC_SAVE=/somewhere/with/more/disk/space`). 
 
 Super SAC also logs training and evaluation metrics to this directory. By default, we log with tensorbaord. You can see the logs by running `tensorboard --logdir saves`. You can also log the same metrics with [wandb](https://wandb.ai/site). The fastest way to set this up is to define the ``SSAC_WANDB_ACCOUNT`` and ``SSAC_WANDB_PROJECT`` environment variables with your wandb username/organization name and project name, respectively. Then add the command line arg `--logging wandb` to the training script call. When you open up wandb you should see something like this:
 

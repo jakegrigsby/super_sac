@@ -559,7 +559,7 @@ def super_sac(
 
 def make_process_dirs(run_name, base_path):
     if base_path is None:
-        base_path == "./saves"
+        base_path = "./saves"
     base_dir = os.path.join(base_path, run_name)
     i = 0
     while os.path.exists(base_dir + f"_{i}"):
