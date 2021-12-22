@@ -38,6 +38,7 @@ def critic_update(
     discrete=False,
     per=False,
     update_priorities=False,
+    dr3_coeff=0.0,
 ):
     logs = {}
 
@@ -52,7 +53,7 @@ def critic_update(
             per=per,
         )
 
-        td_target = lu.compute_td_targets(
+        td_target, (s1, a1) = lu.compute_td_targets(
             logs=logs,
             replay_dict=replay_dict,
             agent=agent,
@@ -84,6 +85,8 @@ def critic_update(
             q_preds = agent.critics[i](s_rep, subset=None, return_min=False)
         else:
             q_preds = agent.critics[i](s_rep, a, subset=None, return_min=False)
+        s_a_features = agent.critics[i].features
+
         for q_pred in q_preds:
             if discrete:
                 q_pred = q_pred.gather(1, a.long())
@@ -93,6 +96,12 @@ def critic_update(
             critic_loss += (
                 backup_weights * replay_dict["imp_weights"] * (td_error ** 2)
             ).mean()
+
+        agent.critics[i](s1, a1); s1_a1_features = agent.critics[i].features
+        feature_co_adaptation = (s_a_features * s1_a1_features).sum(-1).mean()
+        logs[f"dr3_dotproduct_{i}"] = feature_co_adaptation.item()
+        if dr3_coeff > 0:
+            critic_loss +=  dr3_coeff * feature_co_adaptation
 
         replay_dicts.append(replay_dict)
 

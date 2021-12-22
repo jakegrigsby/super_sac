@@ -245,6 +245,8 @@ def filtered_bc_loss(
     if discrete:
         #logp_a = dist.log_prob(a.squeeze(1)).unsqueeze(1).clamp(-1e4, 1e4)
         logp_a = dist.log_prob(a.squeeze(1)).unsqueeze(1)
+        pretrained_logp_a = agent.encoder.pretrained_output.log_prob(a.squeeze(1)).unsqueeze(1)
+        logs["losses/pretrained_log_prob"] = pretrained_logp_a.mean().item()
     else:
         #logp_a = dist.log_prob(a).sum(-1, keepdim=True).clamp(-1e4, 1e4)
         logp_a = dist.log_prob(a).sum(-1, keepdim=True)
@@ -337,7 +339,7 @@ def compute_td_targets(
             td_target = popart.normalize_values(td_target)
     logs[f"td_targets/mean_td_target_{ensemble_idx}"] = td_target.mean().item()
     logs[f"td_targets/std_td_target_{ensemble_idx}"] = td_target.std().item()
-    return td_target
+    return td_target, (s1_rep, a_s1)
 
 
 def compute_backup_weights(

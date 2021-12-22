@@ -61,6 +61,7 @@ def super_sac(
     encoder_tau=0.01,
     target_delay=2,
     n_step=1,
+    dr3_coeff=0.0,
     use_pg_update_online=True,
     use_afbc_update_online=True,
     weighted_bellman_temp=20.0,
@@ -156,6 +157,7 @@ def super_sac(
     qprint(f"\tUse BC Update Online: {use_afbc_update_online}")
     qprint(f"\tUse Random Exploration Noise: {use_exploration_process}")
     qprint(f"\tInit Alpha: {init_alpha}, Alpha LR: {alpha_lr}")
+    qprint(f"\tDR3 Regularization Term: {dr3_coeff}")
     qprint(f"\tAugmenter: {augmenter}")
     qprint(f"\tAug Mix: {aug_mix}")
     qprint(
@@ -380,6 +382,7 @@ def super_sac(
                     per=False,
                     update_priorities=step < bc_warmup_steps + num_steps_offline
                     or use_afbc_update_online,
+                    dr3_coeff=dr3_coeff,
                 )
 
                 # move target model towards training model

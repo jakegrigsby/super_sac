@@ -16,6 +16,7 @@ class Critic(nn.Module):
         self.nets = nn.ModuleList(
             [critic_network_cls(**critic_kwargs) for _ in range(num_critics)]
         )
+        self.features = None
         self.num_critics = num_critics
 
     def forward(self, *args, subset=None, return_min=True):
@@ -31,6 +32,8 @@ class Critic(nn.Module):
             ensemble = self.nets
 
         preds = [q(*args) for q in ensemble]
+        # grab penultimate linear layer's features (for dr3 regularization)
+        self.features = torch.stack([net.features for net in self.nets], dim=0)
         if return_min:
             return torch.stack(preds, dim=0).min(0).values
         else:
