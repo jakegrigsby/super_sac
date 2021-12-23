@@ -188,6 +188,8 @@ Please refer to the links at the top of the README for the arXiv pages of all th
 
 **`pop`** : `bool` : True/False to use the "Pop" part of PopArt value normalization.
 
+**`dr3_coeff`** : `float`: Coefficient for feature aliasing regularization term from [[DR3](https://arxiv.org/abs/2112.04716)]. Reduces performance decline due to repeated gradient updates on offline datasets with out-of-sample actions.
+
 #### Exploration Params
 **`init_alpha`** : `float` : Initial value of MaxEnt coefficient alpha. `init_alpha = 0, alpha_lr = 0` effectively turns off MaxEnt RL (you probably want to set `use_exploration_process = True`). `init_alpha > 0, alpha_lr = 0` disables automatic entropy tuning - leaving the alpha value fixed.
 
