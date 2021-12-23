@@ -98,7 +98,10 @@ def critic_update(
             ).mean()
 
         if dr3_coeff > 0:
-            agent.critics[i](s1, a1)
+            if discrete:
+                agent.critics[i](s1)
+            else:
+                agent.critics[i](s1, a1)
             s1_a1_features = agent.critics[i].features
             feature_co_adaptation = (s_a_features * s1_a1_features).sum(-1).mean()
             logs[f"dr3_dotproduct_{i}"] = feature_co_adaptation.item()

@@ -313,6 +313,7 @@ def compute_td_targets(
             val_s1 = (probs * (s1_q_pred - log_alpha.exp() * log_probs)).sum(
                 1, keepdim=True
             )
+            a_s1 = probs
         else:
             a_s1 = a_dist_s1.sample()
             if random_process is not None:
