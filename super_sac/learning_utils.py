@@ -80,7 +80,9 @@ class EpsilonGreedyExplorationNoise:
 
     def sample(self, action, clip=None, update_schedule=False):
         if random.random() < self.current_scale:
-            rand_action = np.random.randint(0, self.action_space.n, size=action.shape, dtype=action.dtype)
+            rand_action = np.random.randint(
+                0, self.action_space.n, size=action.shape, dtype=action.dtype
+            )
             action = rand_action
         if update_schedule:
             self.current_scale = max(
@@ -243,10 +245,8 @@ def filtered_bc_loss(
         s_rep = agent.encoder(o)
     dist = agent.actors[ensemble_idx](s_rep)
     if discrete:
-        #logp_a = dist.log_prob(a.squeeze(1)).unsqueeze(1).clamp(-1e4, 1e4)
         logp_a = dist.log_prob(a.squeeze(1)).unsqueeze(1)
     else:
-        #logp_a = dist.log_prob(a).sum(-1, keepdim=True).clamp(-1e4, 1e4)
         logp_a = dist.log_prob(a).sum(-1, keepdim=True)
     if filter_:
         logs[f"losses/adv_weights_mean"] = adv_weights.mean().item()
@@ -337,7 +337,7 @@ def compute_td_targets(
             td_target = popart.normalize_values(td_target)
     logs[f"td_targets/mean_td_target_{ensemble_idx}"] = td_target.mean().item()
     logs[f"td_targets/std_td_target_{ensemble_idx}"] = td_target.std().item()
-    return td_target
+    return td_target, (s1_rep, a_s1)
 
 
 def compute_backup_weights(

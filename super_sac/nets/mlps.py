@@ -72,6 +72,7 @@ class ContinuousCritic(nn.Module):
         super().__init__()
         self.fc1 = nn.Linear(state_size + action_size, hidden_size)
         self.fc2 = nn.Linear(hidden_size, hidden_size)
+        self.features = None
         self.out = nn.Linear(hidden_size, 1)
         self.apply(weight_init)
 
@@ -79,6 +80,7 @@ class ContinuousCritic(nn.Module):
         x = torch.cat((state, action), dim=-1)
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
+        self.features = x
         val = self.out(x)
         return val
 
@@ -110,10 +112,12 @@ class DiscreteCritic(nn.Module):
         self.fc1 = nn.Linear(state_size, hidden_size)
         self.fc2 = nn.Linear(hidden_size, hidden_size)
         self.out = nn.Linear(hidden_size, action_size)
+        self.features = None
         self.apply(weight_init)
 
     def forward(self, state):
         x = F.relu(self.fc1(state))
         x = F.relu(self.fc2(x))
+        self.features = x
         vals = self.out(x)
         return vals
