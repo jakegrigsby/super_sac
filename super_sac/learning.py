@@ -97,15 +97,16 @@ def critic_update(
                 backup_weights * replay_dict["imp_weights"] * (td_error ** 2)
             ).mean()
 
-        agent.critics[i](s1, a1); s1_a1_features = agent.critics[i].features
-        feature_co_adaptation = (s_a_features * s1_a1_features).sum(-1).mean()
-        logs[f"dr3_dotproduct_{i}"] = feature_co_adaptation.item()
         if dr3_coeff > 0:
-            critic_loss +=  dr3_coeff * feature_co_adaptation
+            agent.critics[i](s1, a1)
+            s1_a1_features = agent.critics[i].features
+            feature_co_adaptation = (s_a_features * s1_a1_features).sum(-1).mean()
+            logs[f"dr3_dotproduct_{i}"] = feature_co_adaptation.item()
+            critic_loss += dr3_coeff * feature_co_adaptation
 
         replay_dicts.append(replay_dict)
 
-    critic_loss /= (agent.ensemble_size * agent.num_critics)
+    critic_loss /= agent.ensemble_size * agent.num_critics
 
     if encoder_lambda:
         critic_loss += encoder_lambda * lu.encoder_invariance_constraint(
@@ -250,7 +251,7 @@ def alpha_update(
         else:
             logp_a = a_dist.log_prob(a_dist.sample()).sum(-1, keepdim=True)
         alpha_loss = -(log_alphas[i] * (logp_a + target_entropy).detach()).mean()
-       # alpha_loss = -(log_alphas[i].exp() * (logp_a + target_entropy).detach()).mean()
+        # alpha_loss = -(log_alphas[i].exp() * (logp_a + target_entropy).detach()).mean()
         optimizers[i].zero_grad()
         alpha_loss.backward()
         optimizers[i].step()
