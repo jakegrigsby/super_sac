@@ -91,7 +91,7 @@ def super_sac(
     log_interval=5000,
     hparams_config={},
     save_to_disk=True,
-    save_interval=5000,
+    save_best=True,
     verbosity=0,
 ):
     def _get_parallel_envs(env):
@@ -105,6 +105,7 @@ def super_sac(
 
     num_envs = _get_parallel_envs(train_env)
     num_eval_envs = _get_parallel_envs(test_env)
+    best_eval = -float("inf")
 
     if save_to_disk or log_to_disk:
         save_dir = make_process_dirs(name, base_save_path)
@@ -551,8 +552,14 @@ def super_sac(
                     wandb.log(
                         {"return": mean_return, "Accepted Exp Pct": accepted_exp_pct}
                     )
-        if step % save_interval == 0 and save_to_disk:
-            agent.save(save_dir)
+            if save_to_disk:
+                if save_best:
+                    if mean_return >= best_eval:
+                        best_eval = mean_return
+                        agent.save(save_dir)
+                else:
+                    agent.save(save_dir)
+
 
     if save_to_disk:
         agent.save(save_dir)

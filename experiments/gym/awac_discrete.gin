@@ -69,5 +69,5 @@ main.super_sac.aug_mix = 0
 main.super_sac.log_to_disk = True
 main.super_sac.log_interval = 1000
 main.super_sac.save_to_disk = True
-main.super_sac.save_interval = 10_000
+main.super_sac.save_best = True
 main.super_sac.verbosity = 1
