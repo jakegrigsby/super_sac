@@ -32,6 +32,7 @@ def super_sac(
     num_steps_online=100_000,
     afbc_actor_updates_per_step=1,
     pg_actor_updates_per_step=1,
+    markov_abstraction_updates_per_step=0,
     critic_updates_per_step=1,
     target_critic_ensemble_n=2,
     batch_size=512,
@@ -48,6 +49,12 @@ def super_sac(
     critic_l2=0.0,
     encoder_l2=0.0,
     pop=True,
+    dr3_coeff=0.0,
+    #   state abstraction kwargs
+    inverse_markov_coeff=0.0,
+    contrastive_markov_coeff=0.0,
+    smoothness_markov_coeff=0.0,
+    smoothness_markov_max_dist=0.0,
     # rl kwargs
     use_exploration_process=False,
     exploration_param_init=1.0,
@@ -61,7 +68,6 @@ def super_sac(
     encoder_tau=0.01,
     target_delay=2,
     n_step=1,
-    dr3_coeff=0.0,
     use_pg_update_online=True,
     use_afbc_update_online=True,
     weighted_bellman_temp=20.0,
@@ -205,6 +211,16 @@ def super_sac(
         weight_decay=encoder_l2,
         betas=(0.9, 0.999),
     )
+    encoder_markov_optimizer = torch.optim.Adam(
+        chain(
+            agent.encoder.parameters(),
+            agent.inverse_model.parameters(),
+            agent.contrastive_model.parameters(),
+        ),
+        lr=encoder_lr,
+        weight_decay=encoder_l2,
+        betas=(0.9, 0.999),
+    )
 
     # max entropy, disabled with init_alpha = 0, alpha_lr = 0
     init_alpha = max(init_alpha, 1e-15)
@@ -263,7 +279,7 @@ def super_sac(
     done = True  # reset the env on first step
     exp_deque = deque([], maxlen=n_step)  # holds n-step transitions
     for step in progress_bar(total_steps):
-        bc_logs, actor_logs, critic_logs = {}, {}, {}
+        bc_logs, actor_logs, critic_logs, markov_logs = {}, {}, {}, {}
 
         ###############################
         ## Behavioral Cloning Update ##
@@ -397,6 +413,30 @@ def super_sac(
         else:
             critic_logs.update({"schedule/critic_update": 0.0})
 
+        markov_logs.update({"schedule/markov_abstraction_update": 0.0})
+        if step > bc_warmup_steps:
+            for _ in range(markov_abstraction_updates_per_step):
+                ##############################################
+                ## Self-Supervised State Abstraction Update ##
+                ##############################################
+
+                markov_logs.update(
+                    learning.markov_state_abstraction_update(
+                        buffer=buffer,
+                        agent=agent,
+                        optimizer=encoder_markov_optimizer,
+                        batch_size=batch_size,
+                        augmenter=augmenter,
+                        aug_mix=aug_mix,
+                        discrete=agent.discrete,
+                        inverse_coeff=inverse_markov_coeff,
+                        contrastive_coeff=contrastive_markov_coeff,
+                        smoothness_coeff=smoothness_markov_coeff,
+                        smoothness_max_dist=smoothness_markov_max_dist,
+                    )
+                )
+                markov_logs.update({"schedule/markov_abstraction_update": 1.0})
+
         if (step > bc_warmup_steps and step < bc_warmup_steps + num_steps_offline) or (
             step >= bc_warmup_steps + 1 + num_steps_offline and use_afbc_update_online
         ):
@@ -520,11 +560,14 @@ def super_sac(
                     writer.add_scalar(key, val, step)
                 for key, val in performance_logs.items():
                     writer.add_scalar(key, val, step)
+                for key, val in markov_logs.items():
+                    writer.add_scalar(key, val, step)
             elif logging_method == "wandb":
                 wandb.log(critic_logs, step=step)
                 wandb.log(actor_logs, step=step)
                 wandb.log(bc_logs, step=step)
                 wandb.log(performance_logs, step=step)
+                wandb.log(markov_logs, step=step)
 
         if (
             (step % eval_interval == 0) or (step == total_steps - 1)
@@ -559,7 +602,6 @@ def super_sac(
                         agent.save(save_dir)
                 else:
                     agent.save(save_dir)
-
 
     if save_to_disk:
         agent.save(save_dir)

@@ -7,7 +7,7 @@ from torch import nn
 import torch.nn.functional as F
 import gin
 
-from . import device, popart, adv_estimator
+from . import device, popart, adv_estimator, nets
 
 
 class Critic(nn.Module):
@@ -110,6 +110,8 @@ class Agent:
                 discrete=True,
                 discrete_method=adv_method if adv_method else "indirect",
             )
+
+            self.inverse_model = nets.mlps.DiscreteInverseModel(**actor_kwargs)
         else:
             self.adv_estimator = adv_estimator.AdvantageEstimator(
                 encoder=self.encoder,
@@ -119,6 +121,11 @@ class Agent:
                 discrete=False,
                 continuous_method=adv_method if adv_method else "mean",
             )
+            self.inverse_model = nets.mlps.ContinuousInverseModel(**actor_kwargs)
+
+        self.contrastive_model = nets.mlps.ContrastiveModel(
+            state_size=encoder.embedding_dim, hidden_size=hidden_size
+        )
 
         self.discrete = discrete
         self.ucb_bonus = ucb_bonus
@@ -136,6 +143,8 @@ class Agent:
                 self.popart[i] = popart.to(device)
         for i, critic in enumerate(self.critics):
             self.critics[i] = critic.to(device)
+        self.inverse_model = self.inverse_model.to(device)
+        self.contrastive_model = self.contrastive_model.to(device)
 
     def eval(self):
         self.encoder.eval()
@@ -146,6 +155,8 @@ class Agent:
             critic.eval()
         for actor in self.actors:
             actor.eval()
+        self.inverse_model.eval()
+        self.contrastive_model.eval()
 
     def train(self):
         self.encoder.train()
@@ -156,6 +167,8 @@ class Agent:
             critic.train()
         for actor in self.actors:
             actor.train()
+        self.inverse_model.train()
+        self.contrastive_model.train()
 
     def save(self, path):
         encoder_path = os.path.join(path, "encoder.pt")
@@ -170,20 +183,23 @@ class Agent:
         for i, actor in enumerate(self.actors):
             actor_path = os.path.join(path, f"actor{i}.pt")
             torch.save(actor.state_dict(), actor_path)
+        torch.save(self.inverse_model, os.path.join(path, "inverse.pt"))
+        torch.save(self.contrastive_model, os.path.join(path, "contrastive.pt"))
 
     def load(self, path):
-        encoder_path = os.path.join(path, "encoder.pt")
-        self.encoder.load_state_dict(torch.load(encoder_path))
+
+        _load = lambda name: torch.load(os.path.join(path, name), map_location=device)
+
+        self.encoder.load_state_dict(_load("encoder.pt"))
         for i, popart in enumerate(self.popart):
             if popart:
-                popart_path = os.path.join(path, "popart{i}.pt")
-                popart.load_state_dict(torch.load(popart_path))
+                popart.load_state_dict(_load(f"popart{i}.pt"))
         for i, critic in enumerate(self.critics):
-            critic_path = os.path.join(path, f"critic{i}.pt")
-            critic.load_state_dict(torch.load(critic_path))
+            critic.load_state_dict(_load(f"critic{i}.pt"))
         for i, actor in enumerate(self.actors):
-            actor_path = os.path.join(path, f"actor{i}.pt")
-            actor.load_state_dict(torch.load(actor_path))
+            actor.load_state_dict(_load(f"actor{i}.pt"))
+        self.inverse_model.load_state_dict(_load("inverse.pt"))
+        self.contrastive_model.load_state_dict(_load("contrastive.pt"))
 
     def discrete_forward(self, obs, from_cpu=True, num_envs=1):
         if from_cpu:

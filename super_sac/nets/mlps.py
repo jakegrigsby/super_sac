@@ -49,6 +49,23 @@ class ContinuousStochasticActor(nn.Module):
 
 
 @gin.configurable
+class ContinuousInverseModel(ContinuousStochasticActor):
+    def __init__(
+        self,
+        state_size,
+        action_size,
+        hidden_size,
+        **kwargs,
+    ):
+        super().__init__(state_size, action_size, hidden_size=hidden_size, **kwargs)
+        self.fc1 = nn.Linear(state_size * 2, hidden_size)
+
+    def forward(self, state, next_state):
+        inp = torch.cat((state, next_state), dim=1)
+        return super().forward(inp)
+
+
+@gin.configurable
 class ContinuousDeterministicActor(nn.Module):
     def __init__(self, state_size, action_size, hidden_size=256, **kwargs):
         super().__init__()
@@ -64,6 +81,23 @@ class ContinuousDeterministicActor(nn.Module):
         act = torch.tanh(self.out(x))
         dist = distributions.ContinuousDeterministic(act)
         return dist
+
+
+@gin.configurable
+class ContrastiveModel(nn.Module):
+    def __init__(self, state_size, hidden_size=256):
+        super().__init__()
+        self.fc1 = nn.Linear(state_size * 2, hidden_size)
+        self.fc2 = nn.Linear(hidden_size, hidden_size)
+        self.out = nn.Linear(hidden_size, 1)
+        self.apply(weight_init)
+
+    def forward(self, states, next_states):
+        inp = torch.cat((states, next_states), dim=1)
+        x = F.relu(self.fc1(inp))
+        x = F.relu(self.fc2(x))
+        pred = torch.sigmoid(self.out(x))
+        return pred
 
 
 @gin.configurable
@@ -98,11 +132,22 @@ class DiscreteActor(nn.Module):
         x = F.relu(self.fc1(state))
         x = F.relu(self.fc2(x))
         # numerical stability improvement??
-        #act_p = F.softmax(self.act_p(x), dim=-1)
-        #dist = pyd.categorical.Categorical(probs=act_p)
+        # act_p = F.softmax(self.act_p(x), dim=-1)
+        # dist = pyd.categorical.Categorical(probs=act_p)
         act_p = self.act_p(x)
         dist = pyd.categorical.Categorical(logits=act_p)
         return dist
+
+
+@gin.configurable
+class DiscreteInverseModel(DiscreteActor):
+    def __init__(self, state_size, action_size, hidden_size, **kwargs):
+        super().__init__(state_size, action_size, **kwargs)
+        self.fc1 = nn.Linear(state_size * 2, hidden_size)
+
+    def forward(self, state, next_state):
+        inp = torch.cat((state, next_state), dim=1)
+        return super().forward(inp)
 
 
 @gin.configurable
