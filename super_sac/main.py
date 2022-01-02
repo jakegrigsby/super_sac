@@ -165,6 +165,9 @@ def super_sac(
     qprint(f"\tUse Random Exploration Noise: {use_exploration_process}")
     qprint(f"\tInit Alpha: {init_alpha}, Alpha LR: {alpha_lr}")
     qprint(f"\tDR3 Regularization Term: {dr3_coeff}")
+    qprint(
+        f"\tMarkov Abstraction Terms:\n \t\tInverse: {inverse_markov_coeff}, Contrastive: {contrastive_markov_coeff}, Smoothness: {smoothness_markov_coeff} with Max Dist {smoothness_markov_max_dist} "
+    )
     qprint(f"\tAugmenter: {augmenter}")
     qprint(f"\tAug Mix: {aug_mix}")
     qprint(
