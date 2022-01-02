@@ -1,20 +1,19 @@
 ![Super Sac](super_sac_readme_img.png)
 
-This repository contains the code for a PyTorch RL agent that is designed to be a compilation of advanced Off-Policy Actor-Critic variants. It includes elements of **[[DDPG](https://arxiv.org/abs/1509.02971)]**, **[[TD3](https://arxiv.org/abs/1802.0947)]**, **[[SAC](https://arxiv.org/abs/1812.05905)]**, **[[SAC-Discrete](https://arxiv.org/abs/1910.07207)]**, **[[DrQ](https://arxiv.org/abs/2004.13649)]**, **[[DrAC](https://arxiv.org/abs/2006.12862)]**, **[[RAD](https://arxiv.org/abs/2004.14990)]**, **[[SAC+AE](https://arxiv.org/abs/1910.01741)]**, **[[REDQ](https://arxiv.org/abs/2101.05982)]**, **[[CRR](https://arxiv.org/abs/2006.15134)]**, **[[AWAC](https://arxiv.org/abs/2006.09359)]**, **[[SUNRISE](https://arxiv.org/abs/2007.04938)]**, and **[[DrQv2](https://arxiv.org/abs/2107.09645)]**.
+This repository contains the code for a PyTorch RL agent that is designed to be a compilation of advanced Off-Policy Actor-Critic variants. It includes elements of **[[DDPG](https://arxiv.org/abs/1509.02971)]**, **[[TD3](https://arxiv.org/abs/1802.0947)]**, **[[SAC](https://arxiv.org/abs/1812.05905)]**, **[[SAC-Discrete](https://arxiv.org/abs/1910.07207)]**, **[[DrQ](https://arxiv.org/abs/2004.13649)]**, **[[DrAC](https://arxiv.org/abs/2006.12862)]**, **[[RAD](https://arxiv.org/abs/2004.14990)]**, **[[SAC+AE](https://arxiv.org/abs/1910.01741)]**, **[[REDQ](https://arxiv.org/abs/2101.05982)]**, **[[CRR](https://arxiv.org/abs/2006.15134)]**, **[[AWAC](https://arxiv.org/abs/2006.09359)]**, **[[SUNRISE](https://arxiv.org/abs/2007.04938)]**, **[[Markov State Abstractions](https://arxiv.org/abs/2106.04379)]**, **[[DR3](https://arxiv.org/abs/2112.04716)]**, and **[[DrQv2](https://arxiv.org/abs/2107.09645)]**.
 
 ### Main Features:
 - Dictionary-based observations. This allows for multimodal/goal-oriented states and support for a much wider range of environments. Basic gym envs can be wrapped to return a dictionary with one key.
-- Process high-dimensional observations (e.g., images) with a dedicated `Encoder` module designed for each environment **[[DrQ](https://arxiv.org/abs/2004.13649)]**, **[[SAC+AE](https://arxiv.org/abs/1910.01741)]**.
+- Process high-dimensional observations (like images) with a dedicated `Encoder` module designed for each environment. Particular emphasis on recent pixel-based control techniques including data augmentation **[[DrQ](https://arxiv.org/abs/2004.13649)]**, **[[DrQv2](https://arxiv.org/abs/2107.09645)]**, **[[RAD](https://arxiv.org/abs/2004.14990)]** and self-supervised representation learning **[[Markov State Abstractions](https://arxiv.org/abs/2106.04379)]**.
 - MaxEnt RL with automatic entropy tuning **[[SAC](https://arxiv.org/abs/1812.05905)]**.
 - Continuous and discrete **[[SAC-Discrete](https://arxiv.org/abs/1910.07207)]** action spaces.
 - Warmup learning with behavioral cloning from an offline dataset.
 - A hybrid version of **[[CRR](https://arxiv.org/abs/2006.15134)]** and **[[AWAC](https://arxiv.org/abs/2006.09359)]** for Offline RL and Offline pre-training.
-- Data Augmentation for pixel-based control **[[DrQ](https://arxiv.org/abs/2004.13649)]**, **[[DrQv2](https://arxiv.org/abs/2107.09645)]**, **[[RAD](https://arxiv.org/abs/2004.14990)]**, with regularization **[[DrAC](https://arxiv.org/abs/2006.12862)]**.
 - Ensemble of critic networks with the generalized clipped-double-q-trick **[[REDQ](https://arxiv.org/abs/2101.05982)]**.
 - Critic-uncertainty exploration incentive **[[SUNRISE](https://arxiv.org/abs/2007.04938)]**.
 - Ensembling and weighted bellman updates **[[SUNRISE](https://arxiv.org/abs/2007.04938)]**. 
 - Parallel environment collection (with a lot of help from [stable_baselines3](https://github.com/DLR-RM/stable-baselines3)).
--  Value function normalization **[[PopArt](https://arxiv.org/abs/1809.04474)]**.
+- Value function normalization **[[PopArt](https://arxiv.org/abs/1809.04474)]**.
 - N-step Q updates.
 - Manual (random noise) exploration **[[DDPG](https://arxiv.org/abs/1509.02971)]** **[[DQN](https://arxiv.org/abs/1312.5602)]**. Noise included in TD target computation **[[TD3](https://arxiv.org/abs/1802.0947)]** and actor update **[[DrQv2](https://arxiv.org/abs/2107.0964)]**.
 - Tensorboard and [wandb](https://wandb.ai/site) logging.
@@ -106,7 +105,7 @@ The main training loop has three phases:
  Using this schedule you can perform imitation learning, pre-training from demonstrations, fully offline learning, or standard online learning. It is also possible to perform AFBC and PG-style policy updates simultaneously during online training. This tends to work better for discrete actions than continuous ones. Another option is to use AFBC during offline pre-training and then switch to PG during online finetuning. The core functionality for this is already included, but learning is pretty unstable due to the change in optimizers/loss-functions. Work on fixing this problem is ongoing.  
 
 ### Credits and References:
-Please refer to the links at the top of the README for the arXiv pages of all the techniques included in this repository. In addition to the papers themselves, this work has greatly benefited from open-source implemenations, especially: [`denisyarats/pytorch_sac`](https://github.com/denisyarats/pytorch_sac), [`facebookresearch/drqv2`](https://github.com/facebookresearch/drqv2), [`ku2482/sac-discrete.pytorch`](https://github.com/ku2482/sac-discrete.pytorch), and [`MishaLaskin/rad`](https://github.com/MishaLaskin/rad). Much of the core code was originally based on my implementations in [`jakegrigsby/deep_control`](https://github.com/jakegrigsby/deep_control).
+Please refer to the links at the top of the README for the arXiv pages of all the techniques included in this repository. In addition to the papers themselves, this work has greatly benefited from open-source implemenations, especially: [`denisyarats/pytorch_sac`](https://github.com/denisyarats/pytorch_sac), [`facebookresearch/drqv2`](https://github.com/facebookresearch/drqv2), [`ku2482/sac-discrete.pytorch`](https://github.com/ku2482/sac-discrete.pytorch), [`MishaLaskin/rad`](https://github.com/MishaLaskin/rad), and [`camall3n/markov-state-abstractions`](https://github.com/camall3n/markov-state-abstractions). Much of the core code was originally based on my implementations in [`jakegrigsby/deep_control`](https://github.com/jakegrigsby/deep_control).
 
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -187,6 +186,10 @@ Please refer to the links at the top of the README for the arXiv pages of all th
 **`actor_lr`**, **`critic_lr`**, **`encoder_lr`**, **`actor_clip`**, **`critic_clip`**, **`encoder_clip`**, **`actor_l2`**, **`critic_l2`**, **`encoder_l2`** : `float` : Are the optmizer learning rates, grad clipping, and l2 regularization parameters. Note that the encoder parameters have no effect when using fake encoders (classic state-based gym envs).
 
 **`pop`** : `bool` : True/False to use the "Pop" part of PopArt value normalization.
+
+**`dr3_coeff`** : `float`: Coefficient for feature aliasing regularization term from [[DR3](https://arxiv.org/abs/2112.04716)]. Reduces performance decline due to repeated gradient updates on offline datasets with out-of-sample actions.
+
+**`inverse_markov_coeff`, `contrastive_markov_coeff`, `smoothness_markov_coeff`, `smoothness_markov_max_dist`** : `float` : Coefficients and terms for the loss functions involved in [[Markov State Abstractions](https://arxiv.org/abs/2106.04379)]. Learn better representations when relying on large `Encoder` modules to process high-dimensional observations.
 
 #### Exploration Params
 **`init_alpha`** : `float` : Initial value of MaxEnt coefficient alpha. `init_alpha = 0, alpha_lr = 0` effectively turns off MaxEnt RL (you probably want to set `use_exploration_process = True`). `init_alpha > 0, alpha_lr = 0` disables automatic entropy tuning - leaving the alpha value fixed.
