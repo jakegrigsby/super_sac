@@ -263,6 +263,73 @@ def alpha_update(
     return logs
 
 
+def markov_state_abstraction_update(
+    buffer,
+    agent,
+    optimizer,
+    batch_size,
+    augmenter,
+    aug_mix,
+    discrete,
+    inverse_coeff,
+    contrastive_coeff,
+    smoothness_coeff,
+    smoothness_max_dist,
+):
+    """
+    Self-Supervised state abstraction loss function from
+    "Learning Markov State Abstractions for Deep Reinforcement Learning"
+    (https://arxiv.org/abs/2106.04379).
+    """
+    logs = {}
+    replay_dict = lu.sample_move_and_augment(
+        buffer=buffer,
+        batch_size=batch_size,
+        augmenter=augmenter,
+        per=False,
+        aug_mix=aug_mix,
+    )
+    o, a, _, o1, d = replay_dict["primary_batch"]
+    s_rep = agent.encoder(o)
+    s1_rep = agent.encoder(o1)
+
+    a_dist = agent.inverse_model(s_rep, s1_rep)
+    inverse_loss = -a_dist.log_prob(a.squeeze(1)).mean()
+
+    s1_rep_neg = s1_rep[torch.randperm(batch_size)]
+    pos_labels = torch.ones(batch_size)
+    neg_labels = torch.zeros(batch_size)
+    labels = torch.cat((pos_labels, neg_labels)).to(device).unsqueeze(1)
+
+    s_candidates = torch.cat((s_rep, s_rep), dim=0)
+    s1_candidates = torch.cat((s1_rep, s1_rep_neg), dim=0)
+    real_trans_preds = agent.contrastive_model(s_candidates, s1_candidates)
+    contrastive_loss = F.binary_cross_entropy(real_trans_preds, labels)
+
+    dist = torch.norm(s1_rep - s_rep, dim=1, p=2) / math.sqrt(s_rep.shape[1])
+    smoothness_loss = (F.relu(dist - smoothness_max_dist)).square().mean()
+
+    markov_loss = (
+        inverse_coeff * inverse_loss
+        + contrastive_coeff * contrastive_loss
+        + smoothness_coeff * smoothness_loss
+    )
+
+    optimizer.zero_grad()
+    markov_loss.backward()
+    optimizer.step()
+
+    logs["gradients/contrastive_model_grad_norm"] = lu.get_grad_norm(
+        agent.contrastive_model
+    )
+    logs["gradients/inverse_model_grad_norm"] = lu.get_grad_norm(agent.inverse_model)
+    logs["losses/markov_loss"] = markov_loss.item()
+    logs["losses/inverse_model_loss"] = inverse_loss.item()
+    logs["losses/contrastive_model_loss"] = contrastive_loss.item()
+    logs["losses/smoothness_loss"] = smoothness_loss.item()
+    return logs
+
+
 def online_actor_update(
     buffer,
     agent,
