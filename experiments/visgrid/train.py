@@ -2,6 +2,9 @@
 This script mostly recreates the main grid world experiment figure in
 "Learning Markov State Abstractions for Deep Reinforcement Learning",
 Allen et al. 2021 (https://arxiv.org/abs/2106.04379)
+
+It takes ~5 mins to run on a GPU and will display a scatter plot similar
+to arXiv v3 Figure 3a.
 """
 import argparse
 import gin
