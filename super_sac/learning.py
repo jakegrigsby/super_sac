@@ -294,7 +294,7 @@ def markov_state_abstraction_update(
     s1_rep = agent.encoder(o1)
 
     a_dist = agent.inverse_model(s_rep, s1_rep)
-    inverse_loss = -a_dist.log_prob(a).mean()
+    inverse_loss = -a_dist.log_prob(a.squeeze(1)).mean()
 
     s1_rep_neg = s1_rep[torch.randperm(batch_size)]
     pos_labels = torch.ones(batch_size)

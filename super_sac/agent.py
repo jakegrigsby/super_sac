@@ -184,7 +184,9 @@ class Agent:
             actor_path = os.path.join(path, f"actor{i}.pt")
             torch.save(actor.state_dict(), actor_path)
         torch.save(self.inverse_model.state_dict(), os.path.join(path, "inverse.pt"))
-        torch.save(self.contrastive_model.state_dict(), os.path.join(path, "contrastive.pt"))
+        torch.save(
+            self.contrastive_model.state_dict(), os.path.join(path, "contrastive.pt")
+        )
 
     def load(self, path):
 

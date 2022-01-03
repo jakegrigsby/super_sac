@@ -6,6 +6,22 @@ import torch.nn.functional as F
 import numpy as np
 
 
+def create_tanh_normal(vec, log_std_low, log_std_high):
+    mu, log_std = vec.chunk(2, dim=-1)
+    log_std = torch.tanh(log_std)
+    log_std = log_std_low + 0.5 * (log_std_high - log_std_low) * (log_std + 1)
+    std = log_std.exp()
+    dist = SquashedNormal(mu, std)
+    return dist
+
+
+def create_beta(vec):
+    vec = 1.0 + F.softplus(vec)
+    alpha, beta = vec.chunk(2, dim=-1)
+    dist = BetaDist(alpha, beta)
+    return dist
+
+
 class BetaDist(pyd.transformed_distribution.TransformedDistribution):
     class _BetaDistTransform(pyd.transforms.Transform):
         domain = pyd.constraints.real

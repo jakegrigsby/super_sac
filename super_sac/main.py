@@ -32,7 +32,6 @@ def super_sac(
     num_steps_online=100_000,
     afbc_actor_updates_per_step=1,
     pg_actor_updates_per_step=1,
-    markov_abstraction_updates_per_step=0,
     critic_updates_per_step=1,
     target_critic_ensemble_n=2,
     batch_size=512,
@@ -51,6 +50,7 @@ def super_sac(
     pop=True,
     dr3_coeff=0.0,
     #   state abstraction kwargs
+    markov_abstraction_updates_per_step=0,
     inverse_markov_coeff=0.0,
     contrastive_markov_coeff=0.0,
     smoothness_markov_coeff=0.0,
@@ -377,6 +377,7 @@ def super_sac(
 
             if step == bc_warmup_steps + 1:
                 qprint("[First Critic Update]")
+            critic_logs.update({"schedule/critic_update": 0.0})
             for critic_update in range(critic_updates_per_step):
                 critic_logs, premade_replay_dicts = learning.critic_update(
                     buffer=buffer,
@@ -404,6 +405,7 @@ def super_sac(
                     or use_afbc_update_online,
                     dr3_coeff=dr3_coeff,
                 )
+                critic_logs.update({"schedule/critic_update": 1.0})
 
                 # move target model towards training model
                 if (critic_update + step) % target_delay == 0:
@@ -412,9 +414,6 @@ def super_sac(
                     ):
                         lu.soft_update(target_critic, agent_critic, mlp_tau)
                     lu.soft_update(target_agent.encoder, agent.encoder, encoder_tau)
-            critic_logs.update({"schedule/critic_update": 1.0})
-        else:
-            critic_logs.update({"schedule/critic_update": 0.0})
 
         markov_logs.update({"schedule/markov_abstraction_update": 0.0})
         if step > bc_warmup_steps:
