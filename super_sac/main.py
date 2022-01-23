@@ -435,6 +435,7 @@ def super_sac(
                         contrastive_coeff=contrastive_markov_coeff,
                         smoothness_coeff=smoothness_markov_coeff,
                         smoothness_max_dist=smoothness_markov_max_dist,
+                        grad_clip=encoder_clip,
                     )
                 )
                 markov_logs.update({"schedule/markov_abstraction_update": 1.0})
