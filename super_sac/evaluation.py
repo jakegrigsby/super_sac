@@ -1,6 +1,7 @@
 import gym
 import numpy as np
 import torch
+import gin
 
 
 def run_env(
@@ -42,6 +43,7 @@ def exploration_noise(action, random_process):
     return np.clip(action + random_process.sample(), -1.0, 1.0)
 
 
+@gin.configurable
 def evaluate_agent(
     agent,
     env,
