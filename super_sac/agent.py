@@ -175,7 +175,7 @@ class Agent:
         torch.save(self.encoder.state_dict(), encoder_path)
         for i, popart in enumerate(self.popart):
             if popart:
-                popart_path = os.path.join(path, "popart{i}.pt")
+                popart_path = os.path.join(path, f"popart{i}.pt")
                 torch.save(popart.state_dict(), popart_path)
         for i, critic in enumerate(self.critics):
             critic_path = os.path.join(path, f"critic{i}.pt")

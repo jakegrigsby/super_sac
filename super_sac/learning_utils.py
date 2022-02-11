@@ -310,7 +310,8 @@ def compute_td_targets(
             s1_q_pred = target_critic(s1_rep, subset=ensemble_n)
             probs = a_dist_s1.probs
             log_probs = torch.log_softmax(a_dist_s1.logits, dim=1)
-            val_s1 = (probs * (s1_q_pred - log_alpha.exp() * log_probs)).sum(
+            entropy_bonus = log_alpha.exp() * log_probs
+            val_s1 = (probs * (s1_q_pred - entropy_bonus)).sum(
                 1, keepdim=True
             )
             a_s1 = probs
@@ -338,6 +339,7 @@ def compute_td_targets(
             td_target = popart.normalize_values(td_target)
     logs[f"td_targets/mean_td_target_{ensemble_idx}"] = td_target.mean().item()
     logs[f"td_targets/std_td_target_{ensemble_idx}"] = td_target.std().item()
+    logs[f"td_targets/entropy_bonus_{ensemble_idx}"] = entropy_bonus.mean().item()
     return td_target, (s1_rep, a_s1)
 
 

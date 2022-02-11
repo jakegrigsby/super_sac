@@ -601,6 +601,7 @@ def super_sac(
             if save_to_disk:
                 if save_best:
                     if mean_return >= best_eval:
+                        qprint(f"[Saving Agent with Return: {mean_return}]")
                         best_eval = mean_return
                         agent.save(save_dir)
                 else:
