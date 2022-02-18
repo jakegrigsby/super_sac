@@ -99,6 +99,7 @@ def super_sac(
     save_to_disk=True,
     save_best=True,
     verbosity=0,
+    evaluation_method=evaluation.evaluate_agent,
 ):
     def _get_parallel_envs(env):
         _env = env
@@ -575,7 +576,7 @@ def super_sac(
         if (
             (step % eval_interval == 0) or (step == total_steps - 1)
         ) and eval_interval > 0:
-            mean_return = evaluation.evaluate_agent(
+            mean_return = evaluation_method(
                 agent,
                 test_env,
                 eval_episodes,
