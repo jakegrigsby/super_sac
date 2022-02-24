@@ -117,6 +117,7 @@ def super_sac(
     if save_to_disk or log_to_disk:
         save_dir = make_process_dirs(name, base_save_path)
     if log_to_disk:
+        hparams_config["ssac_run_name"] = name
         if logging_method == "tensorboard":
             writer = tensorboardX.SummaryWriter(save_dir)
             writer.add_hparams(hparams_config, {})

@@ -329,6 +329,7 @@ def markov_state_abstraction_update(
         agent.contrastive_model
     )
     logs["gradients/inverse_model_grad_norm"] = lu.get_grad_norm(agent.inverse_model)
+    logs["gradients/encoder_markovloss_grad_norm"] = lu.get_grad_norm(agent.encoder)
     logs["losses/markov_loss"] = markov_loss.item()
     logs["losses/inverse_model_loss"] = inverse_loss.item()
     logs["losses/contrastive_model_loss"] = contrastive_loss.item()
