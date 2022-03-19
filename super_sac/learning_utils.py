@@ -311,9 +311,7 @@ def compute_td_targets(
             probs = a_dist_s1.probs
             log_probs = torch.log_softmax(a_dist_s1.logits, dim=1)
             entropy_bonus = log_alpha.exp() * log_probs
-            val_s1 = (probs * (s1_q_pred - entropy_bonus)).sum(
-                1, keepdim=True
-            )
+            val_s1 = (probs * (s1_q_pred - entropy_bonus)).sum(1, keepdim=True)
             a_s1 = probs
         else:
             a_s1 = a_dist_s1.sample()

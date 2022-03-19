@@ -276,7 +276,6 @@ def markov_state_abstraction_update(
     smoothness_coeff,
     smoothness_max_dist,
     grad_clip,
-
 ):
     """
     Self-Supervised state abstraction loss function from
@@ -320,9 +319,14 @@ def markov_state_abstraction_update(
     optimizer.zero_grad()
     markov_loss.backward()
     if grad_clip is not None:
-        torch.nn.utils.clip_grad_norm_(chain(agent.encoder.parameters(),
-                            agent.inverse_model.parameters(),
-                            agent.contrastive_model.parameters()), grad_clip)
+        torch.nn.utils.clip_grad_norm_(
+            chain(
+                agent.encoder.parameters(),
+                agent.inverse_model.parameters(),
+                agent.contrastive_model.parameters(),
+            ),
+            grad_clip,
+        )
     optimizer.step()
 
     logs["gradients/contrastive_model_grad_norm"] = lu.get_grad_norm(

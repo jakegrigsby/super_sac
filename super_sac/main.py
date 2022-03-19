@@ -339,7 +339,9 @@ def super_sac(
                     steps_this_ep = 0
                     done = False
                     exp_deque.clear()
-                action = agent.sample_action(state, from_cpu=True, num_envs=num_envs)
+                action = agent.sample_action(
+                    state, from_cpu=True, num_envs=num_envs, rolling=True
+                )
                 if use_exploration_process:
                     actor_logs["exploration_noise_param"] = random_process.current_scale
                     action = random_process.sample(action, update_schedule=True)
