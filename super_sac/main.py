@@ -61,6 +61,7 @@ def super_sac(
     exploration_param_final=0.1,
     exploration_param_anneal=1_000_000,
     exploration_update_clip=0.3,
+    rolling_encoder_exploration=True,
     init_alpha=0.1,
     target_entropy_mul=1.0,
     gamma=0.99,
@@ -339,8 +340,12 @@ def super_sac(
                     steps_this_ep = 0
                     done = False
                     exp_deque.clear()
+                    agent.encoder.reset_rolling()
                 action = agent.sample_action(
-                    state, from_cpu=True, num_envs=num_envs, rolling=True
+                    state,
+                    from_cpu=True,
+                    num_envs=num_envs,
+                    rolling=rolling_encoder_exploration,
                 )
                 if use_exploration_process:
                     actor_logs["exploration_noise_param"] = random_process.current_scale

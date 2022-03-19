@@ -21,6 +21,7 @@ def run_env(
         episode_return = 0.0
         state = env.reset()
         still_counts = np.expand_dims(np.array([1.0 for _ in range(num_envs)]), 1)
+        agent.encoder.reset_rolling()
         for _ in range(max_steps):
             if still_counts.sum() == 0:
                 break
