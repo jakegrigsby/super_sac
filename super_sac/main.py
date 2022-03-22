@@ -364,6 +364,8 @@ def super_sac(
                     buffer_done = done
                 # put this transition in our n-step queue
                 exp_deque.append((state, action, reward, next_state, buffer_done))
+                if num_envs > 1:
+                    done = done.any()
                 if len(exp_deque) == exp_deque.maxlen:
                     # enough transitions to compute n-step returns
                     s, a, r, s1, d = exp_deque.popleft()
@@ -371,9 +373,7 @@ def super_sac(
                         *_, r_i, s1, d = trans
                         r += (gamma ** (i + 1)) * r_i
                     # buffer gets n-step transition
-                    buffer.push(s, a, r, s1, d)
-                if num_envs > 1:
-                    done = done.any()
+                    buffer.push(s, a, r, s1, done=d, terminate_traj=done)
                 state = next_state
                 steps_this_ep += 1
                 if steps_this_ep >= max_episode_steps:

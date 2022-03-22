@@ -114,7 +114,7 @@ def warmup_buffer(
     done = False
     steps_this_ep = 0
     exp_deque = deque([], maxlen=n_step)
-    for _ in range(warmup_steps):
+    for step_num in range(warmup_steps):
         if done:
             state = env.reset()
             steps_this_ep = 0
@@ -136,7 +136,13 @@ def warmup_buffer(
                 *_, r_i, s1, d = trans
                 r += (gamma ** (i + 1)) * r_i
             # buffer gets n-step transition
-            buffer.push(s, a, r, s1, d)
+            if num_envs > 1:
+                traj_over = d.any()
+            else:
+                traj_over = d
+            buffer.push(
+                s, a, r, s1, d, terminate_traj=traj_over or step_num >= warmup_steps - 1
+            )
         if num_envs > 1:
             done = done.any()
         state = next_state
@@ -160,6 +166,7 @@ def _move_dict_to_device(dict_):
 
 
 def sample_move_and_augment(buffer, batch_size, augmenter, aug_mix, per=True):
+    assert len(buffer) >= batch_size
     if per:
         batch, imp_weights, priority_idxs = buffer.sample(batch_size)
     else:

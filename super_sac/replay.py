@@ -151,8 +151,8 @@ class ReplayBuffer(_BasicReplayBuffer):
         self._max_priority = 1.0
         self.total_sample_calls = 0
 
-    def push(self, s, a, r, s_1, d, priorities=None):
-        R = super().push(s, a, r, s_1, d)
+    def push(self, state, action, reward, next_state, done, priorities=None, **kwargs):
+        R = super().push(state, action, reward, next_state, done)
         if priorities is None:
             priorities = self._max_priority
         self._it_sum[R] = priorities ** self.alpha
@@ -573,7 +573,7 @@ class TrajectoryBuffer:
     def __len__(self):
         return sum([len(traj) for traj in self._trajectory_buffer])
 
-    def push(self, state, action, reward, next_state, done):
+    def push(self, state, action, reward, next_state, done, terminate_traj=None):
         if not isinstance(action, np.ndarray):
             action = np.array([action])
         if not isinstance(reward, np.ndarray):
@@ -581,7 +581,10 @@ class TrajectoryBuffer:
         if not isinstance(done, np.ndarray):
             done = np.array([done])
         self._cur_trajectory.push(state, action, reward, next_state, done)
-        if done.any():
+
+        if terminate_traj is None:
+            termiante_traj = done.any()
+        if terminate_traj:
             self._cur_trajectory.archive()
             self._trajectory_buffer.append(self._cur_trajectory)
             self._force_remake = True
