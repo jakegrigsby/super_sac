@@ -1,5 +1,10 @@
 import numpy as np
 import torch
+from torch.utils.data import IterableDataset, DataLoader
+import random
+import warnings
+from collections import deque
+from typing import Dict, Tuple, List
 
 
 class ReplayBufferStorage:
@@ -344,3 +349,271 @@ class MinSegmentTree(SegmentTree):
         :return: (Any) reduction of MinSegmentTree
         """
         return super(MinSegmentTree, self).reduce(start, end)
+
+
+class _Trajectory:
+    """
+    Trajectories build a sequence of (s, a, r, d) tuples and
+    then "archive" them in the form of a zarr group that can
+    be stored in memory or on disk.
+    """
+
+    def __init__(self, parallel_envs: int = 1):
+        self._data = {}
+        self.archived = False
+        self._partial_traj = {
+            "states": [],
+            "actions": [],
+            "rewards": [],
+            "next_states": [],
+            "dones": [],
+        }
+        self.state_keys = []
+        self._length = None
+        self.parallel_envs = parallel_envs
+
+    def _pad_if_not_parallel(self, s, a, r, s1, d):
+        if self.parallel_envs == 1:
+            s = {k: np.expand_dims(v, 0) for k, v in s.items()}
+            s1 = {k: np.expand_dims(v, 0) for k, v in s1.items()}
+            a = np.expand_dims(a, 0)
+            while len(r.shape) < 2:
+                r = np.expand_dims(r, 0)
+            while len(d.shape) < 2:
+                d = np.expand_dims(d, 0)
+        return s, a, r, s1, d
+
+    def push(
+        self,
+        s: Dict[str, np.ndarray],
+        a: np.ndarray,
+        r: np.ndarray,
+        s1: Dict[str, np.ndarray],
+        d: np.ndarray,
+    ):
+        # check batch shapes on the way in
+        s, a, r, s1, d = self._pad_if_not_parallel(s, a, r, s1, d)
+        assert isinstance(s, dict)
+        for k, v in s.items():
+            assert v.shape[0] == self.parallel_envs
+        for k, v in s1.items():
+            assert v.shape[0] == self.parallel_envs
+        assert isinstance(a, np.ndarray)
+        assert a.shape[0] == self.parallel_envs
+        assert isinstance(r, np.ndarray)
+        assert r.shape[0] == self.parallel_envs
+        assert isinstance(d, np.ndarray)
+        assert d.shape[0] == self.parallel_envs
+
+        self._partial_traj["states"].append(s)
+        self._partial_traj["actions"].append(a)
+        self._partial_traj["rewards"].append(r)
+        self._partial_traj["next_states"].append(s1)
+        self._partial_traj["dones"].append(d)
+
+    def __len__(self):
+        if self.archived:
+            return self._length
+        return None
+
+    def archive(self):
+        assert not self.archived, "Trajectory has already been archived..."
+        merged_traj = self._merge_traj()
+        assert merged_traj["actions"].shape[0] == self.parallel_envs
+        traj_len = merged_traj["actions"].shape[1]
+        for k, v in merged_traj["states"].items():
+            assert v.shape[:2] == (self.parallel_envs, traj_len)
+        for k, v in merged_traj["next_states"].items():
+            assert v.shape[:2] == (self.parallel_envs, traj_len)
+        assert merged_traj["rewards"].shape[:2] == (self.parallel_envs, traj_len)
+        assert merged_traj["dones"].shape[:2] == (self.parallel_envs, traj_len)
+        assert merged_traj["states"].keys() == merged_traj["next_states"].keys()
+        self._length = traj_len
+        self.state_keys = merged_traj["states"].keys()
+        self._data = merged_traj
+        del self._partial_traj
+        self.archived = True
+
+    def __getitem__(self, idxs):
+        traj_idx, slice_ = idxs
+        assert traj_idx < self.parallel_envs
+        assert self.archived, "Call `archive()` before slicing a Trajectory"
+        assert isinstance(slice_, slice)
+        assert (
+            slice_.stop < self._length
+        ), f"Trajectory slice out of range for end point {slice_.stop} with length {self._final_length}"
+
+        end_idx = range(slice_.start, slice_.stop, slice_.step or 1)[-1]
+        a = self._data["actions"][traj_idx, end_idx]
+        r = self._data["rewards"][traj_idx, end_idx]
+        d = self._data["dones"][traj_idx, end_idx]
+
+        s = {k: self._data["states"][k][traj_idx, slice_] for k in self.state_keys}
+        s1 = {
+            k: self._data["next_states"][k][traj_idx, slice_] for k in self.state_keys
+        }
+        return s, a, r, s1, d
+
+    def _merge_traj(self):
+        states = self._partial_traj["states"]
+        actions = self._partial_traj["actions"]
+        rewards = self._partial_traj["rewards"]
+        next_states = self._partial_traj["next_states"]
+        dones = self._partial_traj["dones"]
+
+        merged_s = {k: [] for k in states[0].keys()}
+        merged_a = []
+        merged_r = []
+        merged_s1 = {k: [] for k in next_states[0].keys()}
+        merged_d = []
+        for i, (s, a, r, s1, d) in enumerate(
+            zip(states, actions, rewards, next_states, dones)
+        ):
+            for k, v in s.items():
+                try:
+                    merged_s[k].append(v)
+                except KeyError:
+                    raise KeyError(
+                        f"Trajectory: inconsistent state keys! Key `{k}` at timestep {i} "
+                        f"not found in timestep 0 with keys {merged_s.keys()}"
+                    )
+            for k, v in s1.items():
+                try:
+                    merged_s1[k].append(v)
+                except KeyError:
+                    raise KeyError(
+                        f"Trajectory: inconsistent state keys! Key `{k}` at timestep {i} "
+                        f"not found in timestep 0 with keys {merged_s1.keys()}"
+                    )
+            merged_a.append(a)
+            merged_r.append(r)
+            merged_d.append(d)
+
+        s = {
+            k: np.array(v, dtype=v[0].dtype).swapaxes(0, 1) for k, v in merged_s.items()
+        }
+        a = np.array(merged_a, dtype=merged_a[0].dtype).swapaxes(0, 1)
+        r = np.array(merged_r, dtype=np.float32).swapaxes(0, 1)
+        s1 = {
+            k: np.array(v, dtype=v[0].dtype).swapaxes(0, 1)
+            for k, v in merged_s1.items()
+        }
+        d = np.array(merged_d, dtype=bool).swapaxes(0, 1)
+        return {
+            "states": s,
+            "actions": a,
+            "rewards": r,
+            "next_states": s1,
+            "dones": d,
+        }
+
+
+class _TrajectoryBasedDataset(IterableDataset):
+    """
+    Build batches of transitions by slicing sequences from
+    a collection of Trajectory objects. Uses the Pytorch
+    IterableDataset format for multiprocessing (load the
+    next batch while we're training on the previous one).
+    """
+
+    def __init__(self, trajectory_buffer, max_trajectories=1000, seq_length=10):
+        self.max_trajectories = max_trajectories
+        self.seq_length = seq_length
+        self.trajectories = trajectory_buffer
+
+    def _id(self):
+        try:
+            id_ = torch.utils.data.get_worker_info().id
+        except:
+            id_ = 0
+        return id_
+
+    def sample(self):
+        # print(f"{self._id()} : {len(self.trajectories)}")
+        traj = random.choice(self.trajectories)
+        actor_idx = random.randint(0, traj.parallel_envs - 1)
+        start_idx = random.randint(0, len(traj) - self.seq_length - 2)
+        end_idx = start_idx + self.seq_length
+        s, a, r, s1, d = traj[actor_idx, start_idx:end_idx]
+        return s, a, r, s1, d
+
+    def __iter__(self):
+        while True:
+            yield self.sample()
+
+
+class TrajectoryBuffer:
+    """
+    Hide the Trajectory-based format and PyTorch Dataset API behind a
+    standard Q-Learning interface.
+    """
+
+    def __init__(
+        self,
+        max_trajectories: int,
+        seq_length: int,
+        parallel_rollouts: int = 1,
+        workers: int = 8,
+    ):
+        self._trajectory_buffer = deque([], maxlen=max_trajectories)
+        self._dset = _TrajectoryBasedDataset(
+            self._trajectory_buffer,
+            max_trajectories=max_trajectories,
+            seq_length=seq_length,
+        )
+        self.seq_length = seq_length
+        self._parallel_rollouts = parallel_rollouts
+        self._cur_trajectory = _Trajectory(parallel_envs=parallel_rollouts)
+        self._workers = workers
+        self._loader = None
+        self._batch_size = None
+        self._force_remake = False
+        self.total_sample_calls = 0
+
+    def __len__(self):
+        return sum([len(traj) for traj in self._trajectory_buffer])
+
+    def push(self, state, action, reward, next_state, done):
+        if not isinstance(action, np.ndarray):
+            action = np.array([action])
+        if not isinstance(reward, np.ndarray):
+            reward = np.array([reward])
+        if not isinstance(done, np.ndarray):
+            done = np.array([done])
+        self._cur_trajectory.push(state, action, reward, next_state, done)
+        if done.any():
+            self._cur_trajectory.archive()
+            self._trajectory_buffer.append(self._cur_trajectory)
+            self._force_remake = True
+            self._cur_trajectory = _Trajectory(parallel_envs=self._parallel_rollouts)
+
+    def sample(self, batch_size):
+        self.total_sample_calls += 1
+        if self._loader is None or batch_size != self._batch_size or self._force_remake:
+            # The force_remake thing is a hack to get new episodes into worker threads.
+            # I tried but failed to figure out a more complicated multiprocessing solution.
+            # This would get very inefficient if the trajectory length was short.
+            if self._batch_size is not None and batch_size != self._batch_size:
+                warnings.warn(
+                    "Warning: changing the batch_size of a TrajectoryBuffer is not efficient and should be avoided where possible."
+                )
+            self._batch_size = batch_size
+            self._loader = iter(
+                DataLoader(
+                    self._dset,
+                    batch_size=self._batch_size,
+                    num_workers=self._workers,
+                    pin_memory=False,
+                )
+            )
+            self._force_remake = False
+
+        s, a, r, s1, d = next(self._loader)
+
+        if self.seq_length == 1:
+            s = {k: v.squeeze(1) for k, v in s.items()}
+            s1 = {k: v.squeeze(1) for k, v in s1.items()}
+        return (s, a, r, s1, d), None, None
+
+    def sample_uniform(self, batch_size):
+        return self.sample(batch_size)[:-1]
