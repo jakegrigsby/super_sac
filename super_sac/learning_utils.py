@@ -122,7 +122,7 @@ def warmup_buffer(
             exp_deque.clear()
         rand_action = env.action_space.sample()
         if not isinstance(rand_action, np.ndarray):
-            rand_action = np.array(float(rand_action))
+            rand_action = np.array(rand_action)
             if len(rand_action.shape) == 0:
                 rand_action = np.expand_dims(rand_action, 0)
         if num_envs > 1:

@@ -532,7 +532,7 @@ class _TrajectoryBasedDataset(IterableDataset):
         # print(f"{self._id()} : {len(self.trajectories)}")
         traj = random.choice(self.trajectories)
         actor_idx = random.randint(0, traj.parallel_envs - 1)
-        start_idx = random.randint(0, len(traj) - self.seq_length - 2)
+        start_idx = random.randint(0, len(traj) - self.seq_length - 1)
         end_idx = start_idx + self.seq_length
         s, a, r, s1, d = traj[actor_idx, start_idx:end_idx]
         return s, a, r, s1, d

@@ -561,7 +561,8 @@ def super_sac(
         #############
         if (step % log_interval == 0) and log_to_disk:
             performance_logs = {
-                "replay_buffer_total_samples": buffer.total_sample_calls
+                "replay_buffer_total_samples": buffer.total_sample_calls,
+                "len(buffer)": len(buffer),
             }
             if logging_method == "tensorboard":
                 for key, val in critic_logs.items():
