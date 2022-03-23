@@ -440,8 +440,8 @@ class _Trajectory:
         assert self.archived, "Call `archive()` before slicing a Trajectory"
         assert isinstance(slice_, slice)
         assert (
-            slice_.stop < self._length
-        ), f"Trajectory slice out of range for end point {slice_.stop} with length {self._final_length}"
+            slice_.stop <= self._length
+        ), f"Trajectory slice out of range for end point {slice_.stop} with length {self._length}"
 
         end_idx = range(slice_.start, slice_.stop, slice_.step or 1)[-1]
         a = self._data["actions"][traj_idx, end_idx]
@@ -532,7 +532,7 @@ class _TrajectoryBasedDataset(IterableDataset):
         # print(f"{self._id()} : {len(self.trajectories)}")
         traj = random.choice(self.trajectories)
         actor_idx = random.randint(0, traj.parallel_envs - 1)
-        start_idx = random.randint(0, len(traj) - self.seq_length - 1)
+        start_idx = random.randint(0, len(traj) - self.seq_length)
         end_idx = start_idx + self.seq_length
         s, a, r, s1, d = traj[actor_idx, start_idx:end_idx]
         return s, a, r, s1, d
@@ -571,7 +571,7 @@ class TrajectoryBuffer:
         self.total_sample_calls = 0
 
     def __len__(self):
-        return sum([len(traj) for traj in self._trajectory_buffer])
+        return sum([len(traj) * traj.parallel_envs for traj in self._trajectory_buffer])
 
     def push(self, state, action, reward, next_state, done, terminate_traj=None):
         if not isinstance(action, np.ndarray):
@@ -606,7 +606,7 @@ class TrajectoryBuffer:
                     self._dset,
                     batch_size=self._batch_size,
                     num_workers=self._workers,
-                    pin_memory=False,
+                    pin_memory=True,
                 )
             )
             self._force_remake = False
