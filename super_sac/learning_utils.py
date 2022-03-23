@@ -107,7 +107,7 @@ def get_grad_norm(model):
 
 
 def warmup_buffer(
-    buffer, env, warmup_steps, max_episode_steps, n_step, gamma, num_envs=1
+    buffer, env, warmup_steps : int, max_episode_steps : int, n_step : int, gamma :float , num_envs : int = 1
 ):
     # use warmp up steps to add random transitions to the buffer
     state = env.reset()
@@ -136,10 +136,7 @@ def warmup_buffer(
                 *_, r_i, s1, d = trans
                 r += (gamma ** (i + 1)) * r_i
             # buffer gets n-step transition
-            if num_envs > 1:
-                traj_over = d.any()
-            else:
-                traj_over = d
+            traj_over = d.any() if num_envs > 1 else d
             buffer.push(
                 s, a, r, s1, d, terminate_traj=traj_over or step_num >= warmup_steps - 1
             )
