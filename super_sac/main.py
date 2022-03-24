@@ -98,9 +98,9 @@ def super_sac(
     log_interval=5000,
     hparams_config={},
     save_to_disk=True,
-    save_best=True,
-    verbosity=0,
+    save_best="eval/mean_return",
     evaluation_method=evaluation.evaluate_agent,
+    verbosity=0,
 ):
     def _get_parallel_envs(env):
         _env = env
@@ -585,7 +585,7 @@ def super_sac(
         if (
             (step % eval_interval == 0) or (step == total_steps - 1)
         ) and eval_interval > 0:
-            mean_return = evaluation_method(
+            eval_logs = evaluation_method(
                 agent,
                 test_env,
                 eval_episodes,
@@ -602,17 +602,21 @@ def super_sac(
                     batch_size=batch_size,
                 )
                 if logging_method == "tensorboard":
-                    writer.add_scalar("return", mean_return, step)
+                    for key, val in eval_logs.items():
+                        writer.add_scalar(key, val, step)
                     writer.add_scalar("Accepted Exp Pct", accepted_exp_pct, step)
                 elif logging_method == "wandb":
-                    wandb.log(
-                        {"return": mean_return, "Accepted Exp Pct": accepted_exp_pct}
-                    )
+                    wandb.log({**eval_logs, **{"Accepted Exp Pct": accepted_exp_pct}})
+
             if save_to_disk:
-                if save_best:
-                    if mean_return >= best_eval:
-                        qprint(f"[Saving Agent with Return: {mean_return}]")
-                        best_eval = mean_return
+                if save_best is not None:
+                    assert (
+                        save_best in eval_logs
+                    ), f"`save_best` metric {save_best} not found in evaluation logs with keys {eval_logs.keys()}"
+                    eval_metric = eval_logs[save_best]
+                    if eval_metric > best_eval:
+                        qprint(f"[Saving Agent with {save_best}: {eval_metric}]")
+                        best_eval = eval_metric
                         agent.save(save_dir)
                 else:
                     agent.save(save_dir)

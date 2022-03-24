@@ -74,4 +74,4 @@ def evaluate_agent(
     )
     agent.train()
     mean_return = returns.mean()
-    return mean_return
+    return {"eval/mean_return": mean_return}
