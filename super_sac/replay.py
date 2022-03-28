@@ -110,9 +110,7 @@ class _BasicReplayBuffer:
                 act_example = action
                 state_example = state
             self._storage = ReplayBufferStorage(
-                self._maxsize,
-                state_example=state_example,
-                act_example=act_example,
+                self._maxsize, state_example=state_example, act_example=act_example,
             )
         return self._storage.add(state, action, reward, next_state, done)
 
@@ -529,8 +527,8 @@ class _TrajectoryBasedDataset(IterableDataset):
         return id_
 
     def _extend(self, arr):
-        # longer = np.ones((self.seq_length,) + arr.shape[1:], dtype=arr.dtype) * arr[0]
-        longer = np.zeros((self.seq_length,) + arr.shape[1:], dtype=arr.dtype)
+        longer = np.ones((self.seq_length,) + arr.shape[1:], dtype=arr.dtype) * arr[0]
+        # longer = np.zeros((self.seq_length,) + arr.shape[1:], dtype=arr.dtype)
         longer[-len(arr) :] = arr
         return longer
 
@@ -634,6 +632,9 @@ class TrajectoryBuffer:
         if self.seq_length == 1:
             s = {k: v.squeeze(1) for k, v in s.items()}
             s1 = {k: v.squeeze(1) for k, v in s1.items()}
+            a = a.squeeze(1)
+            r = r.squeeze(1)
+            d = d.squeeze(1)
         return (s, a, r, s1, d), None, None
 
     def sample_uniform(self, batch_size):
