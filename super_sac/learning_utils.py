@@ -86,8 +86,7 @@ class EpsilonGreedyExplorationNoise:
             action = rand_action
         if update_schedule:
             self.current_scale = max(
-                self.current_scale - self._eps_slope,
-                self.eps_final,
+                self.current_scale - self._eps_slope, self.eps_final,
             )
         return action
 
@@ -110,6 +109,8 @@ def warmup_buffer(
     buffer,
     env,
     warmup_steps: int,
+    infinite_bootstrap: bool,
+    ignore_all_dones: bool,
     max_episode_steps: int,
     n_step: int,
     gamma: float,
@@ -134,7 +135,18 @@ def warmup_buffer(
         if num_envs > 1:
             rand_action = np.array([rand_action for _ in range(num_envs)])
         next_state, reward, done, info = env.step(rand_action)
-        exp_deque.append((state, rand_action, reward, next_state, done))
+        if ignore_all_dones or (
+            infinite_bootstrap and steps_this_ep + 1 == max_episode_steps
+        ):
+            buffer_done = (
+                np.expand_dims(np.array([False for _ in range(num_envs)]), 1)
+                if num_envs > 1
+                else False
+            )
+        else:
+            buffer_done = done
+
+        exp_deque.append((state, rand_action, reward, next_state, buffer_done))
         if len(exp_deque) == exp_deque.maxlen:
             # enough transitions to compute n-step returns
             s, a, r, s1, d = exp_deque.popleft()
@@ -212,10 +224,7 @@ def sample_move_and_augment(buffer, batch_size, augmenter, aug_mix, per=True):
 
 
 def compute_filter_stats(
-    buffer,
-    agent,
-    augmenter,
-    batch_size,
+    buffer, agent, augmenter, batch_size,
 ):
     replay_dict = sample_move_and_augment(
         buffer=buffer,

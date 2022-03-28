@@ -550,7 +550,9 @@ class _TrajectoryBasedDataset(IterableDataset):
         actor_idx = random.randint(0, traj.parallel_envs - 1)
         start_idx = random.randint(0, max(len(traj) - self.seq_length, 0))
         end_idx = min(start_idx + self.seq_length, len(traj))
-        s, a, r, s1, d = self._pad(*traj[actor_idx, start_idx:end_idx])
+        s, a, r, s1, d = traj[actor_idx, start_idx:end_idx]
+        if len(d) < self.seq_length:
+            s, a, r, s1, d = self._pad(s, a, r, s1, d)
         return s, a, r, s1, d
 
     def __iter__(self):

@@ -259,8 +259,6 @@ class Agent:
                 state_rep = self.encoder.forward(obs)
 
             if self.ucb_bonus > 0:
-                # TODO: CHECK THESE DIMS FOR SEQUENCE DATA
-
                 # UCB bonus incentivizes taking actions that the ensemble of
                 # critics disagree about (from SUNRISE). When using parallel
                 # training environments this becomes a huge tensor shape headache...
