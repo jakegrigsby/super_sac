@@ -46,10 +46,10 @@ class AdvantageEstimator(nn.Module):
                 [actor(state_rep).probs for actor in self.actors], dim=0
             ).mean(0)
             min_q = self.pop(ensemble_idx, state_rep)
-            value = (probs * min_q).sum(1, keepdim=True)
+            value = (probs * min_q).sum(-1, keepdim=True)
 
         # Q(s, a)
-        q_preds = self.pop(ensemble_idx, state_rep).gather(1, action.long())
+        q_preds = self.pop(ensemble_idx, state_rep).gather(-1, action.long())
 
         # A(s, a) = Q(s, a) - V(s)
         adv = q_preds - value
