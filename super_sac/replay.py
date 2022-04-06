@@ -110,7 +110,9 @@ class _BasicReplayBuffer:
                 act_example = action
                 state_example = state
             self._storage = ReplayBufferStorage(
-                self._maxsize, state_example=state_example, act_example=act_example,
+                self._maxsize,
+                state_example=state_example,
+                act_example=act_example,
             )
         return self._storage.add(state, action, reward, next_state, done)
 

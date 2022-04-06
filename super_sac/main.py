@@ -276,6 +276,8 @@ def super_sac(
             buffer=buffer,
             env=train_env,
             warmup_steps=random_warmup_steps,
+            infinite_bootstrap=infinite_bootstrap,
+            ignore_all_dones=ignore_all_dones,
             max_episode_steps=max_episode_steps,
             n_step=n_step,
             gamma=gamma,

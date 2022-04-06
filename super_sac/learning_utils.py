@@ -86,7 +86,8 @@ class EpsilonGreedyExplorationNoise:
             action = rand_action
         if update_schedule:
             self.current_scale = max(
-                self.current_scale - self._eps_slope, self.eps_final,
+                self.current_scale - self._eps_slope,
+                self.eps_final,
             )
         return action
 
@@ -224,7 +225,10 @@ def sample_move_and_augment(buffer, batch_size, augmenter, aug_mix, per=True):
 
 
 def compute_filter_stats(
-    buffer, agent, augmenter, batch_size,
+    buffer,
+    agent,
+    augmenter,
+    batch_size,
 ):
     replay_dict = sample_move_and_augment(
         buffer=buffer,
