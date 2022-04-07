@@ -107,7 +107,15 @@ def get_grad_norm(model):
 
 
 def warmup_buffer(
-    buffer, env, warmup_steps : int, max_episode_steps : int, n_step : int, gamma :float , num_envs : int = 1
+    buffer,
+    env,
+    warmup_steps: int,
+    infinite_bootstrap: bool,
+    ignore_all_dones: bool,
+    max_episode_steps: int,
+    n_step: int,
+    gamma: float,
+    num_envs: int = 1,
 ):
     # use warmp up steps to add random transitions to the buffer
     state = env.reset()
@@ -128,7 +136,18 @@ def warmup_buffer(
         if num_envs > 1:
             rand_action = np.array([rand_action for _ in range(num_envs)])
         next_state, reward, done, info = env.step(rand_action)
-        exp_deque.append((state, rand_action, reward, next_state, done))
+        if ignore_all_dones or (
+            infinite_bootstrap and steps_this_ep + 1 == max_episode_steps
+        ):
+            buffer_done = (
+                np.expand_dims(np.array([False for _ in range(num_envs)]), 1)
+                if num_envs > 1
+                else False
+            )
+        else:
+            buffer_done = done
+
+        exp_deque.append((state, rand_action, reward, next_state, buffer_done))
         if len(exp_deque) == exp_deque.maxlen:
             # enough transitions to compute n-step returns
             s, a, r, s1, d = exp_deque.popleft()
@@ -225,7 +244,7 @@ def compute_filter_stats(
             o, a, ensemble_idx=random.choice(range(agent.ensemble_size))
         )
         exp_filter = (adv >= 0.0).float()
-    pct_accepted = (exp_filter.sum().float() / exp_filter.shape[0]) * 100.0
+    pct_accepted = (exp_filter.sum().float() / exp_filter.numel()) * 100.0
     return pct_accepted.item()
 
 
@@ -249,7 +268,7 @@ def filtered_bc_loss(
         s_rep = agent.encoder(o)
     dist = agent.actors[ensemble_idx](s_rep)
     if discrete:
-        logp_a = dist.log_prob(a.squeeze(1)).unsqueeze(1)
+        logp_a = dist.log_prob(a.squeeze(-1)).unsqueeze(-1)
     else:
         logp_a = dist.log_prob(a).sum(-1, keepdim=True)
     if filter_:
@@ -313,9 +332,9 @@ def compute_td_targets(
         if discrete:
             s1_q_pred = target_critic(s1_rep, subset=ensemble_n)
             probs = a_dist_s1.probs
-            log_probs = torch.log_softmax(a_dist_s1.logits, dim=1)
+            log_probs = torch.log_softmax(a_dist_s1.logits, dim=-1)
             entropy_bonus = log_alpha.exp() * log_probs
-            val_s1 = (probs * (s1_q_pred - entropy_bonus)).sum(1, keepdim=True)
+            val_s1 = (probs * (s1_q_pred - entropy_bonus)).sum(-1, keepdim=True)
             a_s1 = probs
         else:
             a_s1 = a_dist_s1.sample()
@@ -364,7 +383,7 @@ def compute_backup_weights(
             s_rep = target_agent.encoder(o)
             if discrete:
                 q_std = torch.stack(
-                    [q(s_rep).gather(1, a.long()) for q in target_agent.critics], dim=0
+                    [q(s_rep).gather(-1, a.long()) for q in target_agent.critics], dim=0
                 ).std(0)
             else:
                 q_std = torch.stack(
@@ -377,7 +396,7 @@ def compute_backup_weights(
             for actor, critic in agent.ensemble:
                 a1 = actor(s1_rep).sample()
                 if discrete:
-                    q1s.append(critic(s1_rep).gather(1, a1.unsqueeze(1).long()))
+                    q1s.append(critic(s1_rep).gather(-1, a1.unsqueeze(-1).long()))
                 else:
                     q1s.append(critic(s1_rep, a1))
             q_std = torch.stack(q1s, dim=0).std(0)

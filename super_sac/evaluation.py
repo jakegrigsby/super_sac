@@ -41,6 +41,7 @@ def run_env(
         if verbosity:
             print(f"Episode {episode}:: {episode_return.mean().item()}")
         episode_return_history.append(episode_return)
+    agent.encoder.reset_rolling()
     return np.array(episode_return_history)
 
 

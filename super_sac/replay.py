@@ -443,10 +443,10 @@ class _Trajectory:
             slice_.stop <= self._length
         ), f"Trajectory slice out of range for end point {slice_.stop} with length {self._length}"
 
-        end_idx = range(slice_.start, slice_.stop, slice_.step or 1)[-1]
-        a = self._data["actions"][traj_idx, end_idx]
-        r = self._data["rewards"][traj_idx, end_idx]
-        d = self._data["dones"][traj_idx, end_idx]
+        # end_idx = range(slice_.start, slice_.stop, slice_.step or 1)[-1]
+        a = self._data["actions"][traj_idx, slice_]
+        r = self._data["rewards"][traj_idx, slice_]
+        d = self._data["dones"][traj_idx, slice_]
 
         s = {k: self._data["states"][k][traj_idx, slice_] for k in self.state_keys}
         s1 = {
@@ -528,13 +528,31 @@ class _TrajectoryBasedDataset(IterableDataset):
             id_ = 0
         return id_
 
+    def _extend(self, arr):
+        longer = np.ones((self.seq_length,) + arr.shape[1:], dtype=arr.dtype) * arr[0]
+        # longer = np.zeros((self.seq_length,) + arr.shape[1:], dtype=arr.dtype)
+        longer[-len(arr) :] = arr
+        return longer
+
+    def _pad(self, s, a, r, s1, d):
+        for k in s.keys():
+            s[k] = self._extend(s[k])
+        for k in s1.keys():
+            s1[k] = self._extend(s1[k])
+        a = self._extend(a)
+        r = self._extend(r)
+        d = self._extend(d)
+        return s, a, r, s1, d
+
     def sample(self):
         # print(f"{self._id()} : {len(self.trajectories)}")
         traj = random.choice(self.trajectories)
         actor_idx = random.randint(0, traj.parallel_envs - 1)
-        start_idx = random.randint(0, len(traj) - self.seq_length)
-        end_idx = start_idx + self.seq_length
+        start_idx = random.randint(0, max(len(traj) - self.seq_length, 0))
+        end_idx = min(start_idx + self.seq_length, len(traj))
         s, a, r, s1, d = traj[actor_idx, start_idx:end_idx]
+        if len(d) < self.seq_length:
+            s, a, r, s1, d = self._pad(s, a, r, s1, d)
         return s, a, r, s1, d
 
     def __iter__(self):
@@ -616,7 +634,13 @@ class TrajectoryBuffer:
         if self.seq_length == 1:
             s = {k: v.squeeze(1) for k, v in s.items()}
             s1 = {k: v.squeeze(1) for k, v in s1.items()}
+            a = a.squeeze(1)
+            r = r.squeeze(1)
+            d = d.squeeze(1)
         return (s, a, r, s1, d), None, None
 
     def sample_uniform(self, batch_size):
         return self.sample(batch_size)[:-1]
+
+    def update_priorities(self, *args, **kwargs):
+        pass
