@@ -23,6 +23,12 @@ class Encoder(nn.Module):
         super().__init__()
         self.have_at_least_one_param = nn.Linear(1, 1)
 
+    def forward_rolling(self, obs):
+        return self.forward(obs)
+
+    def reset_rolling(self):
+        pass
+
     @property
     @abstractmethod
     def embedding_dim(self):

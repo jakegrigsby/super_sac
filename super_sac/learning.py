@@ -89,7 +89,7 @@ def critic_update(
 
         for q_pred in q_preds:
             if discrete:
-                q_pred = q_pred.gather(1, a.long())
+                q_pred = q_pred.gather(-1, a.long())
             if agent.popart[i] and pop:
                 q_pred = agent.popart[i](q_pred)
             td_error = td_target - q_pred
@@ -250,7 +250,7 @@ def alpha_update(
             a_dist = agent.actors[i](s_rep)
 
         if discrete:
-            logp_a = (a_dist.probs * torch.log_softmax(a_dist.logits, dim=1)).sum(-1)
+            logp_a = (a_dist.probs * torch.log_softmax(a_dist.logits, dim=-1)).sum(-1)
         else:
             logp_a = a_dist.log_prob(a_dist.sample()).sum(-1, keepdim=True)
         alpha_loss = -(log_alphas[i] * (logp_a + target_entropy).detach()).mean()
@@ -276,7 +276,6 @@ def markov_state_abstraction_update(
     smoothness_coeff,
     smoothness_max_dist,
     grad_clip,
-
 ):
     """
     Self-Supervised state abstraction loss function from
@@ -296,19 +295,19 @@ def markov_state_abstraction_update(
     s1_rep = agent.encoder(o1)
 
     a_dist = agent.inverse_model(s_rep, s1_rep)
-    inverse_loss = -a_dist.log_prob(a.squeeze(1)).mean()
+    inverse_loss = -a_dist.log_prob(a.squeeze(-1)).mean()
 
     s1_rep_neg = s1_rep[torch.randperm(batch_size)]
-    pos_labels = torch.ones(batch_size)
-    neg_labels = torch.zeros(batch_size)
-    labels = torch.cat((pos_labels, neg_labels)).to(device).unsqueeze(1)
+    pos_labels = torch.ones(*s_rep.shape[:-1], 1)
+    neg_labels = torch.zeros(*s_rep.shape[:-1], 1)
+    labels = torch.cat((pos_labels, neg_labels), dim=0).to(device)
 
     s_candidates = torch.cat((s_rep, s_rep), dim=0)
     s1_candidates = torch.cat((s1_rep, s1_rep_neg), dim=0)
     real_trans_preds = agent.contrastive_model(s_candidates, s1_candidates)
     contrastive_loss = F.binary_cross_entropy(real_trans_preds, labels)
 
-    dist = torch.norm(s1_rep - s_rep, dim=1, p=2) / math.sqrt(s_rep.shape[1])
+    dist = torch.norm(s1_rep - s_rep, dim=-1, p=2) / math.sqrt(s_rep.shape[-1])
     smoothness_loss = (F.relu(dist - smoothness_max_dist)).square().mean()
 
     markov_loss = (
@@ -320,9 +319,14 @@ def markov_state_abstraction_update(
     optimizer.zero_grad()
     markov_loss.backward()
     if grad_clip is not None:
-        torch.nn.utils.clip_grad_norm_(chain(agent.encoder.parameters(),
-                            agent.inverse_model.parameters(),
-                            agent.contrastive_model.parameters()), grad_clip)
+        torch.nn.utils.clip_grad_norm_(
+            chain(
+                agent.encoder.parameters(),
+                agent.inverse_model.parameters(),
+                agent.contrastive_model.parameters(),
+            ),
+            grad_clip,
+        )
     optimizer.step()
 
     logs["gradients/contrastive_model_grad_norm"] = lu.get_grad_norm(
@@ -377,13 +381,13 @@ def online_actor_update(
         a_dist = actor(s_rep)
         if discrete:
             probs = a_dist.probs
-            log_probs = torch.log_softmax(a_dist.logits, dim=1)
+            log_probs = torch.log_softmax(a_dist.logits, dim=-1)
             with torch.no_grad():
                 vals = critic(s_rep)
                 if popart and pop:
                     vals = popart(vals)
-            vals = (probs * vals).sum(1, keepdim=True)
-            entropy_bonus = log_alpha.exp() * (probs * log_probs).sum(1, keepdim=True)
+            vals = (probs * vals).sum(-1, keepdim=True)
+            entropy_bonus = log_alpha.exp() * (probs * log_probs).sum(-1, keepdim=True)
         else:
             a = a_dist.rsample()
             if random_process is not None:

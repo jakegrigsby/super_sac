@@ -61,6 +61,7 @@ def super_sac(
     exploration_param_final=0.1,
     exploration_param_anneal=1_000_000,
     exploration_update_clip=0.3,
+    rolling_encoder_exploration=True,
     init_alpha=0.1,
     target_entropy_mul=1.0,
     gamma=0.99,
@@ -97,9 +98,9 @@ def super_sac(
     log_interval=5000,
     hparams_config={},
     save_to_disk=True,
-    save_best=True,
-    verbosity=0,
+    save_best="eval/mean_return",
     evaluation_method=evaluation.evaluate_agent,
+    verbosity=0,
 ):
     def _get_parallel_envs(env):
         _env = env
@@ -275,6 +276,8 @@ def super_sac(
             buffer=buffer,
             env=train_env,
             warmup_steps=random_warmup_steps,
+            infinite_bootstrap=infinite_bootstrap,
+            ignore_all_dones=ignore_all_dones,
             max_episode_steps=max_episode_steps,
             n_step=n_step,
             gamma=gamma,
@@ -339,7 +342,13 @@ def super_sac(
                     steps_this_ep = 0
                     done = False
                     exp_deque.clear()
-                action = agent.sample_action(state, from_cpu=True, num_envs=num_envs)
+                    agent.encoder.reset_rolling()
+                action = agent.sample_action(
+                    state,
+                    from_cpu=True,
+                    num_envs=num_envs,
+                    rolling=rolling_encoder_exploration,
+                )
                 if use_exploration_process:
                     actor_logs["exploration_noise_param"] = random_process.current_scale
                     action = random_process.sample(action, update_schedule=True)
@@ -357,6 +366,8 @@ def super_sac(
                     buffer_done = done
                 # put this transition in our n-step queue
                 exp_deque.append((state, action, reward, next_state, buffer_done))
+                if num_envs > 1:
+                    done = done.any()
                 if len(exp_deque) == exp_deque.maxlen:
                     # enough transitions to compute n-step returns
                     s, a, r, s1, d = exp_deque.popleft()
@@ -364,9 +375,7 @@ def super_sac(
                         *_, r_i, s1, d = trans
                         r += (gamma ** (i + 1)) * r_i
                     # buffer gets n-step transition
-                    buffer.push(s, a, r, s1, d)
-                if num_envs > 1:
-                    done = done.any()
+                    buffer.push(s, a, r, s1, done=d, terminate_traj=done)
                 state = next_state
                 steps_this_ep += 1
                 if steps_this_ep >= max_episode_steps:
@@ -554,7 +563,8 @@ def super_sac(
         #############
         if (step % log_interval == 0) and log_to_disk:
             performance_logs = {
-                "replay_buffer_total_samples": buffer.total_sample_calls
+                "replay_buffer_total_samples": buffer.total_sample_calls,
+                "len(buffer)": len(buffer),
             }
             if logging_method == "tensorboard":
                 for key, val in critic_logs.items():
@@ -577,7 +587,7 @@ def super_sac(
         if (
             (step % eval_interval == 0) or (step == total_steps - 1)
         ) and eval_interval > 0:
-            mean_return = evaluation_method(
+            eval_logs = evaluation_method(
                 agent,
                 test_env,
                 eval_episodes,
@@ -594,17 +604,21 @@ def super_sac(
                     batch_size=batch_size,
                 )
                 if logging_method == "tensorboard":
-                    writer.add_scalar("return", mean_return, step)
+                    for key, val in eval_logs.items():
+                        writer.add_scalar(key, val, step)
                     writer.add_scalar("Accepted Exp Pct", accepted_exp_pct, step)
                 elif logging_method == "wandb":
-                    wandb.log(
-                        {"return": mean_return, "Accepted Exp Pct": accepted_exp_pct}
-                    )
+                    wandb.log({**eval_logs, **{"Accepted Exp Pct": accepted_exp_pct}})
+
             if save_to_disk:
-                if save_best:
-                    if mean_return >= best_eval:
-                        qprint(f"[Saving Agent with Return: {mean_return}]")
-                        best_eval = mean_return
+                if save_best is not None:
+                    assert (
+                        save_best in eval_logs
+                    ), f"`save_best` metric {save_best} not found in evaluation logs with keys {eval_logs.keys()}"
+                    eval_metric = eval_logs[save_best]
+                    if eval_metric > best_eval:
+                        qprint(f"[Saving Agent with {save_best}: {eval_metric}]")
+                        best_eval = eval_metric
                         agent.save(save_dir)
                 else:
                     agent.save(save_dir)

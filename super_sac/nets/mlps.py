@@ -63,7 +63,7 @@ class ContinuousInverseModel(nn.Module):
         self.dist_impl = dist_impl
 
     def forward(self, state, next_state):
-        inp = torch.cat((state, next_state), dim=1)
+        inp = torch.cat((state, next_state), dim=-1)
         x = F.relu(self.fc1(inp))
         x = F.relu(self.fc2(x))
         out = self.fc3(x)
@@ -103,7 +103,7 @@ class ContrastiveModel(nn.Module):
         self.apply(weight_init)
 
     def forward(self, states, next_states):
-        inp = torch.cat((states, next_states), dim=1)
+        inp = torch.cat((states, next_states), dim=-1)
         x = F.relu(self.fc1(inp))
         x = F.relu(self.fc2(x))
         pred = torch.sigmoid(self.out(x))
@@ -159,7 +159,7 @@ class DiscreteInverseModel(nn.Module):
         self.apply(weight_init)
 
     def forward(self, state, next_state):
-        inp = torch.cat((state, next_state), dim=1)
+        inp = torch.cat((state, next_state), dim=-1)
         x = F.relu(self.fc1(inp))
         x = F.relu(self.fc2(x))
         act_p = self.act_p(x)

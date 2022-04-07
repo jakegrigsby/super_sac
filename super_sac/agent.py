@@ -203,12 +203,15 @@ class Agent:
         self.inverse_model.load_state_dict(_load("inverse.pt"))
         self.contrastive_model.load_state_dict(_load("contrastive.pt"))
 
-    def discrete_forward(self, obs, from_cpu=True, num_envs=1):
+    def discrete_forward(self, obs, from_cpu=True, num_envs=1, rolling=False):
         if from_cpu:
             obs = self._process_obs(obs, num_envs=num_envs)
         self.eval()
         with torch.no_grad():
-            state_rep = self.encoder.forward(obs)
+            if rolling:
+                state_rep = self.encoder.forward_rolling(obs)
+            else:
+                state_rep = self.encoder.forward(obs)
             act_probs = torch.stack(
                 [actor(state_rep).probs for actor in self.actors], dim=0
             ).mean(0)
@@ -218,12 +221,15 @@ class Agent:
             act = self._process_act(act, num_envs=num_envs)
         return act
 
-    def continuous_forward(self, obs, from_cpu=True, num_envs=1):
+    def continuous_forward(self, obs, from_cpu=True, num_envs=1, rolling=False):
         if from_cpu:
             obs = self._process_obs(obs, num_envs=num_envs)
         self.eval()
         with torch.no_grad():
-            s_rep = self.encoder(obs)
+            if rolling:
+                s_rep = self.encoder.forward_rolling(obs)
+            else:
+                s_rep = self.encoder(obs)
             acts = torch.stack([actor(s_rep).mean for actor in self.actors], dim=0)
             act = acts.mean(0)
         self.train()
@@ -231,17 +237,26 @@ class Agent:
             act = self._process_act(act, num_envs=num_envs)
         return act
 
-    def forward(self, state, from_cpu=True, num_envs=1):
+    def forward(self, state, from_cpu=True, num_envs=1, rolling=False):
         if self.discrete:
-            return self.discrete_forward(state, from_cpu=from_cpu, num_envs=num_envs)
+            return self.discrete_forward(
+                state, from_cpu=from_cpu, num_envs=num_envs, rolling=rolling
+            )
         else:
-            return self.continuous_forward(state, from_cpu=from_cpu, num_envs=num_envs)
+            return self.continuous_forward(
+                state, from_cpu=from_cpu, num_envs=num_envs, rolling=rolling
+            )
 
-    def sample_action(self, obs, from_cpu=True, num_envs=1, return_dist=False):
+    def sample_action(
+        self, obs, from_cpu=True, num_envs=1, return_dist=False, rolling=False
+    ):
         if from_cpu:
             obs = self._process_obs(obs, num_envs)
         with torch.no_grad():
-            state_rep = self.encoder.forward(obs)
+            if rolling:
+                state_rep = self.encoder.forward_rolling(obs)
+            else:
+                state_rep = self.encoder.forward(obs)
 
             if self.ucb_bonus > 0:
                 # UCB bonus incentivizes taking actions that the ensemble of
@@ -308,8 +323,7 @@ class Agent:
         }
 
     def _process_act(self, act, num_envs=1):
-        squeeze = lambda tens: tens.squeeze(0) if num_envs == 1 else tens
-        act = squeeze(act)
+        act = act.squeeze(0) if num_envs == 1 else act
         if not self.discrete:
             act.clamp_(-1.0, 1.0)
         return act.cpu().numpy()
