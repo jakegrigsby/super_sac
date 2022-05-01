@@ -1,0 +1,14 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: Super SAC
+message: >-
+  citation for academic use of super_sac training
+  code
+type: software
+authors:
+  - given-names: Jake
+    family-names: Grigsby
+    email: jcg6dn@virginia.edu
+    affiliation: University of Virginia
