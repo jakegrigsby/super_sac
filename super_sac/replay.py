@@ -84,11 +84,13 @@ class ReplayBufferStorage:
         return (state, action, reward, next_state, done)
 
     def get_all_transitions(self):
+        s = {k: v[: self._max_filled] for k, v in self.s_stack.items()}
+        s1 = {k: v[: self._max_filled] for k, v in self.s1_stack.items()}
         return (
-            self.s_stack[: self._max_filled],
+            s,
             self.action_stack[: self._max_filled],
             self.reward_stack[: self._max_filled],
-            self.s1_stack[: self._max_filled],
+            s1,
             self.done_stack[: self._max_filled],
         )
 
@@ -155,8 +157,8 @@ class ReplayBuffer(_BasicReplayBuffer):
         R = super().push(state, action, reward, next_state, done)
         if priorities is None:
             priorities = self._max_priority
-        self._it_sum[R] = priorities ** self.alpha
-        self._it_min[R] = priorities ** self.alpha
+        self._it_sum[R] = priorities**self.alpha
+        self._it_min[R] = priorities**self.alpha
 
     def _sample_proportional(self, batch_size):
         mass = []
@@ -183,8 +185,8 @@ class ReplayBuffer(_BasicReplayBuffer):
         assert np.min(priorities) > 0
         assert np.min(idxes) >= 0
         assert np.max(idxes) < len(self._storage)
-        self._it_sum[idxes] = priorities ** self.alpha
-        self._it_min[idxes] = priorities ** self.alpha
+        self._it_sum[idxes] = priorities**self.alpha
+        self._it_min[idxes] = priorities**self.alpha
         self._max_priority = max(self._max_priority, np.max(priorities))
 
 
