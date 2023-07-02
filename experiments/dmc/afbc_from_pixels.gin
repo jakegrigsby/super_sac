@@ -57,8 +57,6 @@ main.super_sac.weight_type = None
 main.super_sac.afbc_per = False
 
 main.super_sac.transitions_per_online_step = 0
-main.super_sac.infinite_bootstrap = True
-main.super_sac.ignore_all_dones = False
 main.super_sac.max_episode_steps = 1000
 main.super_sac.eval_episodes = 10
 main.super_sac.eval_interval = 10_000
@@ -70,5 +68,4 @@ main.super_sac.aug_mix = .9
 main.super_sac.log_to_disk = True
 main.super_sac.log_interval = 1000
 main.super_sac.save_to_disk = True
-main.super_sac.save_best = True
 main.super_sac.verbosity = 1

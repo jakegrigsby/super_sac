@@ -58,9 +58,6 @@ main.super_sac.afbc_per = False
 
 # two updates per step
 main.super_sac.transitions_per_online_step = 1
-
-main.super_sac.infinite_bootstrap = True
-main.super_sac.ignore_all_dones = False
 main.super_sac.max_episode_steps = 1000
 main.super_sac.eval_episodes = 10
 main.super_sac.eval_interval = 10_000
@@ -69,7 +66,6 @@ main.super_sac.render = False
 main.super_sac.log_to_disk = True
 main.super_sac.log_interval = 1000
 main.super_sac.save_to_disk = True
-main.super_sac.save_best = True
 main.super_sac.verbosity = 1
 
 main.super_sac.encoder_lambda = 0

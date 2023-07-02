@@ -20,7 +20,7 @@ class PopArtLayer(nn.Module):
 
     @property
     def sigma(self):
-        return (torch.sqrt(self.nu - self.mu ** 2) + 1e-5).clamp(1e-4, 1e6)
+        return (torch.sqrt(self.nu - self.mu**2) + 1e-5).clamp(1e-4, 1e6)
 
     def normalize_values(self, val):
         return (val - self.mu) / self.sigma
@@ -39,7 +39,7 @@ class PopArtLayer(nn.Module):
         # Use adaptive step size to reduce reliance on initialization (pg 13)
         beta_t = self.beta / (1.0 - (1.0 - self.beta) ** self._t)
         self.mu = (1.0 - beta_t) * self.mu + beta_t * val.mean()
-        self.nu = (1.0 - beta_t) * self.nu + (beta_t * (val ** 2).mean())
+        self.nu = (1.0 - beta_t) * self.nu + (beta_t * (val**2).mean())
 
         # heuristic to protect stability early in training
         self._stable = (self._t > self.min_steps) and (

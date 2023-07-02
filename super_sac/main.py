@@ -77,8 +77,6 @@ def super_sac(
     afbc_per=True,
     # env and eval kwargs
     transitions_per_online_step=1,
-    infinite_bootstrap=True,
-    ignore_all_dones=False,
     max_episode_steps=1_000_000,
     eval_episodes=10,
     eval_interval=10_000,
@@ -276,8 +274,6 @@ def super_sac(
             buffer=buffer,
             env=train_env,
             warmup_steps=random_warmup_steps,
-            infinite_bootstrap=infinite_bootstrap,
-            ignore_all_dones=ignore_all_dones,
             max_episode_steps=max_episode_steps,
             n_step=n_step,
             gamma=gamma,
@@ -338,7 +334,7 @@ def super_sac(
                 qprint("[Collecting Experience For the First Time]")
             for _ in range(transitions_per_online_step):
                 if done:
-                    state = train_env.reset()
+                    state, info = train_env.reset()
                     steps_this_ep = 0
                     done = False
                     exp_deque.clear()
@@ -352,22 +348,13 @@ def super_sac(
                 if use_exploration_process:
                     actor_logs["exploration_noise_param"] = random_process.current_scale
                     action = random_process.sample(action, update_schedule=True)
-                next_state, reward, done, info = train_env.step(action)
-                if ignore_all_dones or (
-                    infinite_bootstrap and steps_this_ep + 1 == max_episode_steps
-                ):
-                    # override the replay buffer version of done to False
-                    buffer_done = (
-                        np.expand_dims(np.array([False for _ in range(num_envs)]), 1)
-                        if num_envs > 1
-                        else False
-                    )
-                else:
-                    buffer_done = done
+                next_state, reward, terminated, truncated, info = train_env.step(action)
                 # put this transition in our n-step queue
-                exp_deque.append((state, action, reward, next_state, buffer_done))
+                exp_deque.append((state, action, reward, next_state, terminated))
                 if num_envs > 1:
-                    done = done.any()
+                    done = terminated.any() or truncated.any()
+                else:
+                    done = terminated or truncated
                 if len(exp_deque) == exp_deque.maxlen:
                     # enough transitions to compute n-step returns
                     s, a, r, s1, d = exp_deque.popleft()
@@ -398,7 +385,7 @@ def super_sac(
                     encoder_optimizer=encoder_criticloss_optimizer,
                     log_alphas=log_alphas,
                     batch_size=batch_size,
-                    gamma=gamma ** n_step,
+                    gamma=gamma**n_step,
                     critic_clip=critic_clip,
                     encoder_clip=encoder_clip,
                     target_critic_ensemble_n=target_critic_ensemble_n,

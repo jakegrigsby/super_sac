@@ -2,12 +2,9 @@ import argparse
 import os
 import gin
 
-import gym
+import gymnasium as gym
 from torch import nn
 import torch.nn.functional as F
-
-import pybullet
-import pybullet_envs
 
 import super_sac
 from super_sac.wrappers import (
@@ -102,7 +99,7 @@ def train_gym(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--env", type=str, default="Pendulum-v0")
+    parser.add_argument("--env", type=str, default="Pendulum-v1")
     parser.add_argument("--name", type=str, default="super_sac_pendulum_run")
     parser.add_argument("--max_episode_steps", type=int, default=1000)
     parser.add_argument("--render", action="store_true")
