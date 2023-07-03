@@ -1,7 +1,7 @@
 import random
 from collections import deque
 
-import gym
+import gymnasium as gym
 import numpy as np
 
 
@@ -20,12 +20,16 @@ def ParallelActors(make_env, actors):
             self._PARALLEL_ACTORS = actors
             super().__init__(env)
 
+        def reset(self, seed=None, options=None):
+            s = self.env.reset()
+            return s, {}
+
         def step(self, action):
             s, r, d, i = self.env.step(action)
-            return s, self.expand(r), self.expand(d), i
-
-        def expand(self, x):
-            return np.expand_dims(np.array(x), 1)
+            terminated = d[:, np.newaxis]
+            truncated = np.zeros_like(d)[:, np.newaxis]
+            r = r[:, np.newaxis]
+            return s, r, terminated, truncated, i
 
     if actors > 1:
         return _Compatible(SubprocVecEnv([make_env for _ in range(actors)]))

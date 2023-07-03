@@ -59,7 +59,6 @@ class Agent:
         adv_method=None,
         beta_dist=False,
     ):
-
         assert hasattr(encoder, "embedding_dim")
 
         # adjust network constructor arguments based on action space
@@ -189,7 +188,6 @@ class Agent:
         )
 
     def load(self, path):
-
         _load = lambda name: torch.load(os.path.join(path, name), map_location=device)
 
         self.encoder.load_state_dict(_load("encoder.pt"))

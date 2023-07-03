@@ -110,21 +110,19 @@ def warmup_buffer(
     buffer,
     env,
     warmup_steps: int,
-    infinite_bootstrap: bool,
-    ignore_all_dones: bool,
     max_episode_steps: int,
     n_step: int,
     gamma: float,
     num_envs: int = 1,
 ):
     # use warmp up steps to add random transitions to the buffer
-    state = env.reset()
+    state, info = env.reset()
     done = False
     steps_this_ep = 0
     exp_deque = deque([], maxlen=n_step)
     for step_num in range(warmup_steps):
         if done:
-            state = env.reset()
+            state, info = env.reset()
             steps_this_ep = 0
             done = False
             exp_deque.clear()
@@ -135,19 +133,11 @@ def warmup_buffer(
                 rand_action = np.expand_dims(rand_action, 0)
         if num_envs > 1:
             rand_action = np.array([rand_action for _ in range(num_envs)])
-        next_state, reward, done, info = env.step(rand_action)
-        if ignore_all_dones or (
-            infinite_bootstrap and steps_this_ep + 1 == max_episode_steps
-        ):
-            buffer_done = (
-                np.expand_dims(np.array([False for _ in range(num_envs)]), 1)
-                if num_envs > 1
-                else False
-            )
-        else:
-            buffer_done = done
 
-        exp_deque.append((state, rand_action, reward, next_state, buffer_done))
+        next_state, reward, terminated, truncated, info = env.step(rand_action)
+        # use terminated signal to simplify infinite bootsrapping logic
+        exp_deque.append((state, rand_action, reward, next_state, terminated))
+
         if len(exp_deque) == exp_deque.maxlen:
             # enough transitions to compute n-step returns
             s, a, r, s1, d = exp_deque.popleft()
@@ -160,7 +150,7 @@ def warmup_buffer(
                 s, a, r, s1, d, terminate_traj=traj_over or step_num >= warmup_steps - 1
             )
         if num_envs > 1:
-            done = done.any()
+            done = terminated.any() or truncated.any()
         state = next_state
         steps_this_ep += 1
         if steps_this_ep >= max_episode_steps:

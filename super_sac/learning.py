@@ -94,7 +94,7 @@ def critic_update(
                 q_pred = agent.popart[i](q_pred)
             td_error = td_target - q_pred
             critic_loss += (
-                backup_weights * replay_dict["imp_weights"] * (td_error ** 2)
+                backup_weights * replay_dict["imp_weights"] * (td_error**2)
             ).mean()
 
         if dr3_coeff > 0:

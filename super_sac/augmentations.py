@@ -43,7 +43,6 @@ class AugmentationSequence:
 
 class GrayscaleAug:
     def __init__(self, batch_size, p_rand=0.5, *_args, **_kwargs):
-
         self.p_gray = p_rand
         self.batch_size = batch_size
         self.random_inds = np.random.choice(
@@ -92,7 +91,6 @@ class CutoutAug:
         *_args,
         **_kwargs,
     ):
-
         self.box_min = box_min
         self.box_max = box_max
         self.pivot_h = pivot_h
@@ -466,7 +464,6 @@ class VerticalFlipAug(_FlipAug):
 
 class RotateAug:
     def __init__(self, batch_size, *_args, **_kwargs):
-
         self.batch_size = batch_size
         self.change_randomization_params()
 
@@ -477,14 +474,10 @@ class RotateAug:
         return imgs
 
     def change_randomization_params(self):
-        self.random_inds = (
-            torch.randint(
-                4,
-                size=(self.batch_size,),
-            )
-            * self.batch_size
-            + np.arange(self.batch_size)
-        )
+        self.random_inds = torch.randint(
+            4,
+            size=(self.batch_size,),
+        ) * self.batch_size + np.arange(self.batch_size)
 
     def print_parms(self):
         print(self.random_inds)

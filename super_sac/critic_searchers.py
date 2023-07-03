@@ -22,7 +22,6 @@ class _CEM:
         elitism=True,
         device=super_sac.device,
     ):
-
         # misc
         self.num_params = num_params
         self.batch_size = batch_size

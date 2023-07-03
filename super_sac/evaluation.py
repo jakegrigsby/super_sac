@@ -19,7 +19,7 @@ def run_env(
         env.render("rgb_array")
     for episode in range(episodes):
         episode_return = 0.0
-        state = env.reset()
+        state, info = env.reset()
         still_counts = np.expand_dims(np.array([1.0 for _ in range(num_envs)]), 1)
         agent.encoder.reset_rolling()
         for _ in range(max_steps):
@@ -33,7 +33,8 @@ def run_env(
                 action = agent.sample_action(
                     state, num_envs=num_envs, rolling=rolling_encoder
                 )
-            state, reward, done, _ = env.step(action)
+            state, reward, terminated, truncated, info = env.step(action)
+            done = terminated or truncated
             if render:
                 env.render("rgb_array")
             episode_return += still_counts * reward
