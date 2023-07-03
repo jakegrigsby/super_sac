@@ -34,7 +34,7 @@ def run_env(
                     state, num_envs=num_envs, rolling=rolling_encoder
                 )
             state, reward, terminated, truncated, info = env.step(action)
-            done = terminated or truncated
+            done = terminated | truncated
             if render:
                 env.render("rgb_array")
             episode_return += still_counts * reward
