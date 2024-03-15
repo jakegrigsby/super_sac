@@ -65,13 +65,20 @@ class ChannelsFirstWrapper(gym.ObservationWrapper):
 
     def __init__(self, env):
         super().__init__(env)
-        self.observation_space.shape = (
-            env.observation_space.shape[-1],
-        ) + env.observation_space.shape[:-1]
+        prev_space = env.observation_space
+        self.observation_space = type(prev_space)(
+            low=self.cfirst(prev_space.low),
+            high=self.cfirst(prev_space.high),
+            dtype=prev_space.dtype,
+            shape=(env.observation_space.shape[-1],) + env.observation_space.shape[:-1],
+        )
+
+    def cfirst(self, img):
+        img = np.transpose(img, axes=(2, 0, 1))
+        return np.ascontiguousarray(img)
 
     def observation(self, frame):
-        frame = np.transpose(frame, (2, 0, 1))
-        return np.ascontiguousarray(frame)
+        return self.cfirst(frame)
 
 
 class DiscreteActionWrapper(gym.ActionWrapper):
@@ -194,16 +201,16 @@ class StateStack(gym.Wrapper):
         )
         self._skip = skip
 
-    def reset(self):
-        obs = self.env.reset()
+    def reset(self, *args, **kwargs):
+        obs, info = self.env.reset(*args, **kwargs)
         for _ in range(self._k * self._skip):
             self._frames.append(obs)
-        return self._get_obs()
+        return self._get_obs(), info
 
     def step(self, action):
-        obs, reward, done, info = self.env.step(action)
+        obs, reward, te, tr, info = self.env.step(action)
         self._frames.append(obs)
-        return self._get_obs(), reward, done, info
+        return self._get_obs(), reward, te, tr, info
 
     def _get_obs(self):
         assert len(self._frames) == self._k * self._skip
@@ -219,11 +226,11 @@ class FrameSkip(gym.Wrapper):
     def step(self, action):
         tot_rew = 0
         for _ in range(self.skip + 1):
-            next_state, rew, done, info = self.env.step(action)
+            next_state, rew, te, tr, info = self.env.step(action)
             tot_rew += rew
             if done:
                 break
-        return next_state, tot_rew, done, info
+        return next_state, tot_rew, te, tr, info
 
 
 class FrameStack(gym.Wrapper):
@@ -239,16 +246,16 @@ class FrameStack(gym.Wrapper):
             dtype=env.observation_space.dtype,
         )
 
-    def reset(self):
-        obs = self.env.reset()
+    def reset(self, *args, **kwargs):
+        obs, info = self.env.reset(*args, **kwargs)
         for _ in range(self._k):
             self._frames.append(obs)
-        return self._get_obs()
+        return self._get_obs(), info
 
     def step(self, action):
-        obs, reward, done, info = self.env.step(action)
+        obs, reward, te, tr, info = self.env.step(action)
         self._frames.append(obs)
-        return self._get_obs(), reward, done, info
+        return self._get_obs(), reward, te, tr, info
 
     def _get_obs(self):
         assert len(self._frames) == self._k
